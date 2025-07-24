@@ -29,8 +29,6 @@ from utils.visualizations import VisualizationEngine
 st.set_page_config(**PAGE_CONFIG)
 
 # Custom CSS for dark theme and animations
-
-
 def load_custom_css():
     st.markdown("""
     <style>
@@ -124,8 +122,6 @@ def load_custom_css():
     """, unsafe_allow_html=True)
 
 # Initialize session state
-
-
 def init_session_state():
     if 'data_processor' not in st.session_state:
         st.session_state.data_processor = DataProcessor()
@@ -143,24 +139,20 @@ def init_session_state():
         st.session_state.user_email = ""
 
 # Loading animation
-
-
 def show_loading_animation(message: str, duration: int = 3):
     """Show animated loading message"""
     progress_bar = st.progress(0)
     status_text = st.empty()
-
+    
     for i in range(duration * 10):
         progress_bar.progress((i + 1) / (duration * 10))
         status_text.text(f"{message} {'.' * ((i % 3) + 1)}")
         time.sleep(0.1)
-
+    
     progress_bar.empty()
     status_text.empty()
 
 # Header section
-
-
 def render_header():
     st.markdown(f"""
     <div class="main-header">
@@ -171,19 +163,14 @@ def render_header():
     """, unsafe_allow_html=True)
 
 # Sidebar navigation
-
-
 def render_sidebar():
     with st.sidebar:
-        st.image(
-            "https://via.placeholder.com/200x100/FF6B6B/FFFFFF?text=PROFIT+PROJECTS", width=200)
-
+        st.image("https://via.placeholder.com/200x100/FF6B6B/FFFFFF?text=PROFIT+PROJECTS", width=200)
+        
         selected = option_menu(
             menu_title="Navigation",
-            options=["🏠 Home", "📤 Upload Data", "🔧 Process Data",
-                     "📊 Dashboard", "💾 Database", "📧 Share Results"],
-            icons=["house", "upload", "gear",
-                   "bar-chart", "database", "envelope"],
+            options=["🏠 Home", "📤 Upload Data", "🔧 Process Data", "📊 Dashboard", "💾 Database", "📧 Share Results"],
+            icons=["house", "upload", "gear", "bar-chart", "database", "envelope"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -193,15 +180,14 @@ def render_sidebar():
                 "nav-link-selected": {"background-color": "#FF6B6B"},
             }
         )
-
+        
         # User email input
         st.markdown("---")
         st.markdown("### 👤 User Information")
-        user_email = st.text_input(
-            "📧 Your Email Address", value=st.session_state.user_email, placeholder="your.email@example.com")
+        user_email = st.text_input("📧 Your Email Address", value=st.session_state.user_email, placeholder="your.email@example.com")
         if user_email != st.session_state.user_email:
             st.session_state.user_email = user_email
-
+        
         # Company info
         st.markdown("---")
         st.markdown("### 🏢 Company Info")
@@ -211,17 +197,15 @@ def render_sidebar():
         📧 {COMPANY_EMAIL}  
         🏢 Enterprise: {ENTERPRISE_NUMBER}
         """)
-
+        
         return selected
 
 # Home page
-
-
 def render_home():
     st.markdown("## 🎯 Welcome to Our Data Processing Platform")
-
+    
     col1, col2, col3 = st.columns(3)
-
+    
     with col1:
         st.markdown("""
         <div class="metric-card">
@@ -229,7 +213,7 @@ def render_home():
             <p>Support for multiple file formats including CSV, Excel, JSON, PDF, and DOCX</p>
         </div>
         """, unsafe_allow_html=True)
-
+    
     with col2:
         st.markdown("""
         <div class="metric-card">
@@ -237,7 +221,7 @@ def render_home():
             <p>Advanced data cleaning, transformation, and quality improvement tools</p>
         </div>
         """, unsafe_allow_html=True)
-
+    
     with col3:
         st.markdown("""
         <div class="metric-card">
@@ -245,32 +229,25 @@ def render_home():
             <p>Interactive dashboards and comprehensive data analysis</p>
         </div>
         """, unsafe_allow_html=True)
-
+    
     # Statistics
     stats = st.session_state.db_manager.get_statistics()
-
+    
     st.markdown("## 📈 Platform Statistics")
     col1, col2, col3, col4 = st.columns(4)
-
+    
     with col1:
         st.metric("Total Datasets", stats.get('total_datasets', 0))
     with col2:
-        total_size = stats.get('total_size', 0)
-        if isinstance(total_size, (bytes, bytearray)):
-            mb = len(total_size) / 1024 / 1024
-        elif isinstance(total_size, (int, float)):
-            mb = total_size / 1024 / 1024
-        else:
-            mb = 0
-        st.metric("Data Processed", f"{mb:.1f} MB")
+        st.metric("Data Processed", f"{stats.get('total_size', 0) / 1024 / 1024:.1f} MB")
     with col3:
         st.metric("Recent Uploads", stats.get('recent_uploads', 0))
     with col4:
         st.metric("File Types", len(stats.get('datasets_by_type', {})))
-
+    
     # Features overview
     st.markdown("## ✨ Key Features")
-
+    
     features = [
         "🔄 **Automated Data Cleaning** - Remove duplicates, handle missing values, standardize formats",
         "📊 **Interactive Visualizations** - Dynamic charts, graphs, and statistical analysis",
@@ -279,10 +256,10 @@ def render_home():
         "⚡ **Real-time Processing** - Fast data transformation with progress tracking",
         "🎨 **Modern Interface** - Intuitive design with smooth animations"
     ]
-
+    
     for feature in features:
         st.markdown(feature)
-
+    
     # Getting started
     st.markdown("## 🚀 Getting Started")
     st.markdown("""
@@ -294,18 +271,16 @@ def render_home():
     """)
 
 # Upload data page
-
-
 def render_upload():
     st.markdown("## 📤 Upload Your Data")
-
+    
     # File uploader
     uploaded_file = st.file_uploader(
         "Choose a file to upload",
         type=ALLOWED_FILE_TYPES,
-        help=f"Supported formats: {', '.join(ALLOWED_FILE_TYPES)}. Tip: For best results, use clean, well-formatted files."
+        help=f"Supported formats: {', '.join(ALLOWED_FILE_TYPES)}"
     )
-
+    
     if uploaded_file is not None:
         # File info
         file_details = {
@@ -313,39 +288,33 @@ def render_upload():
             "filetype": uploaded_file.type,
             "filesize": uploaded_file.size
         }
-        try:
-            st.markdown("### 📋 File Information")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("File Name", file_details["filename"])
-            with col2:
-                st.metric("File Type", file_details["filetype"])
-            with col3:
-                # File Size display in render_upload
-                file_size = file_details["filesize"]
-                if isinstance(file_size, (bytes, bytearray)):
-                    size_kb = len(file_size) / 1024
-                elif isinstance(file_size, (int, float)):
-                    size_kb = file_size / 1024
-                else:
-                    size_kb = 0
-                st.metric("File Size", f"{size_kb:.1f} KB")
-        except Exception as e:
-            st.error(f"Error displaying file info: {e}")
+        
+        st.markdown("### 📋 File Information")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("File Name", file_details["filename"])
+        with col2:
+            st.metric("File Type", file_details["filetype"])
+        with col3:
+            st.metric("File Size", f"{file_details['filesize'] / 1024:.1f} KB")
+        
         # Load data
-        if st.button("🔄 Load Data", type="primary", help="Load and preview the uploaded file."):
-            try:
-                with st.spinner("Loading your data..."):
-                    show_loading_animation("Processing file", 2)
-                    df = st.session_state.data_processor.load_file(
-                        uploaded_file)
+        if st.button("🔄 Load Data", type="primary"):
+            with st.spinner("Loading your data..."):
+                show_loading_animation("Processing file", 2)
+                
+                df = st.session_state.data_processor.load_file(uploaded_file)
+                
                 if df is not None:
                     st.session_state.current_data = df
                     st.session_state.file_info = file_details
+                    
                     st.success("✅ Data loaded successfully!")
+                    
                     # Preview data
                     st.markdown("### 👀 Data Preview")
                     st.dataframe(df.head(10), use_container_width=True)
+                    
                     # Basic info
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
@@ -355,44 +324,27 @@ def render_upload():
                     with col3:
                         st.metric("Missing Values", df.isnull().sum().sum())
                     with col4:
-                        # Memory Usage display in render_upload
-                        mem_usage = df.memory_usage(deep=True).sum()
-                        if isinstance(mem_usage, (bytes, bytearray)):
-                            mem_kb = len(mem_usage) / 1024
-                        elif isinstance(mem_usage, (int, float)):
-                            mem_kb = mem_usage / 1024
-                        else:
-                            mem_kb = 0
-                        st.metric("Memory Usage", f"{mem_kb:.1f} KB")
-                else:
-                    st.error(
-                        "❌ Failed to load data. Please check your file format.")
-            except Exception as e:
-                st.error(f"Error loading data: {e}")
+                        st.metric("Memory Usage", f"{df.memory_usage(deep=True).sum() / 1024:.1f} KB")
 
 # Process data page
-
-
 def render_process():
     st.markdown("## 🔧 Process Your Data")
-
+    
     if st.session_state.current_data is None:
         st.warning("⚠️ Please upload data first!")
         return
-
+    
     df = st.session_state.current_data
-
+    
     # Processing options
     st.markdown("### ⚙️ Processing Options")
-
+    
     col1, col2 = st.columns(2)
-
+    
     with col1:
         st.markdown("#### 🧹 Data Cleaning")
-        remove_duplicates = st.checkbox(
-            "Remove duplicate rows", help="Removes exact duplicate rows from your data.")
-        handle_missing = st.checkbox(
-            "Handle missing values", help="Choose how to deal with missing (NaN) values.")
+        remove_duplicates = st.checkbox("Remove duplicate rows")
+        handle_missing = st.checkbox("Handle missing values")
         if handle_missing:
             missing_strategy = st.selectbox(
                 "Missing value strategy",
@@ -401,62 +353,62 @@ def render_process():
                     "drop": "Drop rows with missing values",
                     "fill_mean": "Fill with mean (numeric columns)",
                     "fill_mode": "Fill with most frequent value"
-                }[x],
-                help="Select how to handle missing values in your dataset."
+                }[x]
             )
         else:
             missing_strategy = "drop"
-
+    
     with col2:
         st.markdown("#### 🔧 Data Transformation")
-        standardize_text = st.checkbox("Standardize text (lowercase, trim)",
-                                       help="Convert all text columns to lowercase and remove extra spaces.")
-        remove_outliers = st.checkbox(
-            "Remove outliers (IQR method)", help="Remove rows with outlier values in numeric columns using the Interquartile Range method.")
-
-    if st.button("🚀 Process Data", type="primary", help="Apply selected cleaning and transformation options."):
-        try:
-            processing_options = {
-                'remove_duplicates': remove_duplicates,
-                'handle_missing': handle_missing,
-                'missing_strategy': missing_strategy,
-                'standardize_text': standardize_text,
-                'remove_outliers': remove_outliers
-            }
-            with st.spinner("Processing your data..."):
-                show_loading_animation("Applying transformations", 3)
-                processed_df = st.session_state.data_processor.clean_data(
-                    df, processing_options)
+        standardize_text = st.checkbox("Standardize text (lowercase, trim)")
+        remove_outliers = st.checkbox("Remove outliers (IQR method)")
+    
+    # Process button
+    if st.button("🚀 Process Data", type="primary"):
+        processing_options = {
+            'remove_duplicates': remove_duplicates,
+            'handle_missing': handle_missing,
+            'missing_strategy': missing_strategy,
+            'standardize_text': standardize_text,
+            'remove_outliers': remove_outliers
+        }
+        
+        with st.spinner("Processing your data..."):
+            show_loading_animation("Applying transformations", 3)
+            
+            processed_df = st.session_state.data_processor.clean_data(df, processing_options)
             st.session_state.current_data = processed_df
             st.session_state.processing_complete = True
+            
             st.success("✅ Data processing complete!")
+            
             # Show processing log
             st.markdown("### 📝 Processing Log")
             processing_log = st.session_state.data_processor.get_processing_log()
             for log_entry in processing_log[-5:]:  # Show last 5 entries
                 st.text(log_entry)
+            
             # Before/After comparison
             st.markdown("### 📊 Before vs After")
             col1, col2 = st.columns(2)
+            
             with col1:
                 st.markdown("**Original Data**")
                 st.metric("Rows", len(df))
                 st.metric("Missing Values", df.isnull().sum().sum())
                 st.metric("Duplicates", df.duplicated().sum())
+            
             with col2:
                 st.markdown("**Processed Data**")
                 st.metric("Rows", len(processed_df))
                 st.metric("Missing Values", processed_df.isnull().sum().sum())
                 st.metric("Duplicates", processed_df.duplicated().sum())
+            
             # Preview processed data
             st.markdown("### 👀 Processed Data Preview")
             st.dataframe(processed_df.head(10), use_container_width=True)
-        except Exception as e:
-            st.error(f"Error processing data: {e}")
 
 # Dashboard page
-
-
 def render_dashboard():
     st.markdown("## 📊 Interactive Dashboard")
 
@@ -487,21 +439,12 @@ def render_dashboard():
         with col3:
             st.metric("Missing Values", f"{stats['missing_values']:,}")
         with col4:
-            # Memory Usage display in render_dashboard
-            mem_usage = stats['memory_usage']
-            if isinstance(mem_usage, (bytes, bytearray)):
-                mb = len(mem_usage) / 1024 / 1024
-            elif isinstance(mem_usage, (int, float)):
-                mb = mem_usage / 1024 / 1024
-            else:
-                mb = 0
-            st.metric("Memory Usage", f"{mb:.1f} MB")
+            st.metric("Memory Usage", f"{stats['memory_usage'] / 1024 / 1024:.1f} MB")
 
     # Data quality overview
     if 'data_quality' in dashboard_components:
         st.markdown("### 🔍 Data Quality Overview")
-        st.plotly_chart(
-            dashboard_components['data_quality'], use_container_width=True)
+        st.plotly_chart(dashboard_components['data_quality'], use_container_width=True)
 
     # Numeric analysis
     if 'numeric_analysis' in dashboard_components:
@@ -509,12 +452,10 @@ def render_dashboard():
         numeric_figs = dashboard_components['numeric_analysis']
 
         if 'distributions' in numeric_figs:
-            st.plotly_chart(
-                numeric_figs['distributions'], use_container_width=True)
+            st.plotly_chart(numeric_figs['distributions'], use_container_width=True)
 
         if 'box_plots' in numeric_figs:
-            st.plotly_chart(numeric_figs['box_plots'],
-                            use_container_width=True)
+            st.plotly_chart(numeric_figs['box_plots'], use_container_width=True)
 
     # Categorical analysis
     if 'categorical_analysis' in dashboard_components:
@@ -533,8 +474,7 @@ def render_dashboard():
     # Correlation analysis
     if 'correlation' in dashboard_components:
         st.markdown("### 🔗 Correlation Analysis")
-        st.plotly_chart(
-            dashboard_components['correlation'], use_container_width=True)
+        st.plotly_chart(dashboard_components['correlation'], use_container_width=True)
 
     # Time series analysis
     if 'time_series' in dashboard_components:
@@ -549,18 +489,15 @@ def render_dashboard():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        plot_type = st.selectbox(
-            "Plot Type", ["scatter", "line", "bar", "histogram"])
+        plot_type = st.selectbox("Plot Type", ["scatter", "line", "bar", "histogram"])
 
     with col2:
         x_column = st.selectbox("X-axis Column", df.columns)
 
     with col3:
         if plot_type in ["scatter", "line"]:
-            numeric_cols = df.select_dtypes(
-                include=[np.number]).columns.tolist()
-            y_column = st.selectbox(
-                "Y-axis Column", numeric_cols) if numeric_cols else None
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            y_column = st.selectbox("Y-axis Column", numeric_cols) if numeric_cols else None
         else:
             y_column = None
 
@@ -571,8 +508,6 @@ def render_dashboard():
         st.plotly_chart(custom_fig, use_container_width=True)
 
 # Database page
-
-
 def render_database():
     st.markdown("## 💾 Database Management")
 
@@ -582,51 +517,43 @@ def render_database():
 
         col1, col2 = st.columns(2)
         with col1:
-            dataset_name = st.text_input(
-                "Dataset Name", value="My Dataset", help="Give your dataset a descriptive name.")
+            dataset_name = st.text_input("Dataset Name", value="My Dataset")
         with col2:
-            dataset_description = st.text_area(
-                "Description", value="", help="Describe the contents or purpose of this dataset.")
+            dataset_description = st.text_area("Description", value="")
 
-        tags_input = st.text_input("Tags (comma-separated)", value="",
-                                   help="Add tags to help organize and search for this dataset.")
+        tags_input = st.text_input("Tags (comma-separated)", value="")
         tags = [tag.strip() for tag in tags_input.split(",") if tag.strip()]
 
-        if st.button("💾 Save to Database", help="Save the current processed dataset and its metadata to the database."):
-            try:
-                metadata = {
-                    'name': dataset_name,
-                    'description': dataset_description,
-                    'file_size': st.session_state.current_data.memory_usage(deep=True).sum(),
-                    'file_type': st.session_state.file_info.get('filetype', 'unknown') if hasattr(st.session_state, 'file_info') else 'unknown',
-                    'processing_log': st.session_state.data_processor.get_processing_log(),
-                    'user_email': st.session_state.user_email,
-                    'tags': tags
-                }
-                dataset_id = st.session_state.db_manager.save_dataset(
-                    st.session_state.current_data, metadata)
-                if dataset_id:
-                    st.success(f"✅ Dataset saved with ID: {dataset_id}")
-                else:
-                    st.error("❌ Failed to save dataset")
-            except Exception as e:
-                st.error(f"Error saving dataset: {e}")
+        if st.button("💾 Save to Database"):
+            metadata = {
+                'name': dataset_name,
+                'description': dataset_description,
+                'file_size': st.session_state.current_data.memory_usage(deep=True).sum(),
+                'file_type': st.session_state.file_info.get('filetype', 'unknown') if hasattr(st.session_state, 'file_info') else 'unknown',
+                'processing_log': st.session_state.data_processor.get_processing_log(),
+                'user_email': st.session_state.user_email,
+                'tags': tags
+            }
+
+            dataset_id = st.session_state.db_manager.save_dataset(st.session_state.current_data, metadata)
+
+            if dataset_id:
+                st.success(f"✅ Dataset saved with ID: {dataset_id}")
+            else:
+                st.error("❌ Failed to save dataset")
 
     # Search and browse datasets
     st.markdown("### 🔍 Browse Saved Datasets")
 
     col1, col2 = st.columns(2)
     with col1:
-        search_query = st.text_input(
-            "🔍 Search datasets", placeholder="Enter keywords...", help="Search by name, description, or tags.")
+        search_query = st.text_input("🔍 Search datasets", placeholder="Enter keywords...")
     with col2:
-        filter_by_user = st.checkbox(
-            "Show only my datasets", help="Filter to show only datasets you uploaded.")
+        filter_by_user = st.checkbox("Show only my datasets")
 
     # Get datasets
     user_email = st.session_state.user_email if filter_by_user else ""
-    datasets = st.session_state.db_manager.search_datasets(
-        search_query, user_email)
+    datasets = st.session_state.db_manager.search_datasets(search_query, user_email)
 
     if datasets:
         st.markdown(f"Found {len(datasets)} dataset(s)")
@@ -641,15 +568,7 @@ def render_database():
 
                 with col2:
                     st.write(f"**Type:** {dataset['file_type']}")
-                    file_size = dataset['file_size']
-                    if isinstance(file_size, (bytes, bytearray)):
-                        # If file_size is bytes, use its length
-                        size_kb = len(file_size) / 1024
-                    elif isinstance(file_size, (int, float)):
-                        size_kb = file_size / 1024
-                    else:
-                        size_kb = 0
-                    st.write(f"**Size:** {size_kb:.1f} KB")
+                    st.write(f"**Size:** {dataset['file_size'] / 1024:.1f} KB")
 
                 with col3:
                     st.write(f"**Uploaded:** {dataset['upload_date']}")
@@ -663,47 +582,30 @@ def render_database():
 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button(f"📥 Load", key=f"load_{dataset['id']}", help="Load this dataset for further analysis."):
-                        try:
-                            loaded_df = st.session_state.db_manager.load_dataset(
-                                dataset['id'])
-                            if loaded_df is not None:
-                                st.session_state.current_data = loaded_df
-                                st.success("✅ Dataset loaded successfully!")
-                                st.rerun()
-                            else:
-                                st.error("❌ Failed to load dataset.")
-                        except Exception as e:
-                            st.error(f"Error loading dataset: {e}")
+                    if st.button(f"📥 Load", key=f"load_{dataset['id']}"):
+                        loaded_df = st.session_state.db_manager.load_dataset(dataset['id'])
+                        if loaded_df is not None:
+                            st.session_state.current_data = loaded_df
+                            st.success("✅ Dataset loaded successfully!")
+                            st.rerun()
 
                 with col2:
-                    if st.button(f"📋 View Details", key=f"details_{dataset['id']}", help="View all metadata and processing history for this dataset."):
-                        try:
-                            metadata = st.session_state.db_manager.get_dataset_metadata(
-                                dataset['id'])
-                            if metadata:
-                                st.json(metadata)
-                            else:
-                                st.error("❌ Failed to retrieve metadata.")
-                        except Exception as e:
-                            st.error(f"Error retrieving metadata: {e}")
+                    if st.button(f"📋 View Details", key=f"details_{dataset['id']}"):
+                        metadata = st.session_state.db_manager.get_dataset_metadata(dataset['id'])
+                        if metadata:
+                            st.json(metadata)
 
                 with col3:
-                    if st.button(f"🗑️ Delete", key=f"delete_{dataset['id']}", help="Permanently delete this dataset from the database."):
-                        try:
-                            if st.session_state.db_manager.delete_dataset(dataset['id']):
-                                st.success("✅ Dataset deleted successfully!")
-                                st.rerun()
-                            else:
-                                st.error("❌ Failed to delete dataset")
-                        except Exception as e:
-                            st.error(f"Error deleting dataset: {e}")
+                    if st.button(f"🗑️ Delete", key=f"delete_{dataset['id']}"):
+                        if st.session_state.db_manager.delete_dataset(dataset['id']):
+                            st.success("✅ Dataset deleted successfully!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to delete dataset")
     else:
         st.info("No datasets found. Upload and save some data first!")
 
 # Share results page
-
-
 def render_share_results():
     st.markdown("## 📧 Share Your Results")
 
@@ -719,47 +621,41 @@ def render_share_results():
     col1, col2 = st.columns(2)
 
     with col1:
-        recipient_email = st.text_input(
-            "📧 Recipient Email", placeholder="recipient@example.com", help="Enter the email address to send the results to.")
-        export_format = st.selectbox("📄 Export Format", [
-                                     "csv", "excel", "json"], help="Choose the file format for the exported data.")
+        recipient_email = st.text_input("📧 Recipient Email", placeholder="recipient@example.com")
+        export_format = st.selectbox("📄 Export Format", ["csv", "excel", "json"])
 
     with col2:
-        include_summary = st.checkbox(
-            "Include Data Summary", value=True, help="Attach a summary of the data and processing steps.")
-        include_visualizations = st.checkbox(
-            "Include Visualizations", value=False, help="Attach key visualizations as images (if supported).")
+        include_summary = st.checkbox("Include Data Summary", value=True)
+        include_visualizations = st.checkbox("Include Visualizations", value=False)
 
-    if st.button("📧 Send Email", type="primary", help="Send the processed data and summary to the recipient via email."):
-        try:
-            if not recipient_email:
-                st.error("Please enter a recipient email address")
-            elif not st.session_state.email_service.validate_email(recipient_email):
-                st.error("Please enter a valid email address")
-            else:
-                with st.spinner("Sending email..."):
-                    show_loading_animation("Preparing email", 2)
-                    # Prepare metadata
-                    metadata = {
-                        'filename': getattr(st.session_state, 'file_info', {}).get('filename', 'processed_data'),
-                        # This should be original data length
-                        'original_rows': len(df),
-                        'processed_rows': len(df),
-                        'columns': len(df.columns),
-                        'export_format': export_format,
-                        'operations': st.session_state.data_processor.get_processing_log()
-                    }
-                    # Send email
-                    success = st.session_state.email_service.send_processed_data(
-                        recipient_email, df, metadata, export_format
-                    )
-                    if success:
-                        st.success(
-                            f"✅ Email sent successfully to {recipient_email}!")
-                    else:
-                        st.error("❌ Failed to send email")
-        except Exception as e:
-            st.error(f"Error sending email: {e}")
+    if st.button("📧 Send Email", type="primary"):
+        if not recipient_email:
+            st.error("Please enter a recipient email address")
+        elif not st.session_state.email_service.validate_email(recipient_email):
+            st.error("Please enter a valid email address")
+        else:
+            with st.spinner("Sending email..."):
+                show_loading_animation("Preparing email", 2)
+
+                # Prepare metadata
+                metadata = {
+                    'filename': getattr(st.session_state, 'file_info', {}).get('filename', 'processed_data'),
+                    'original_rows': len(df),  # This should be original data length
+                    'processed_rows': len(df),
+                    'columns': len(df.columns),
+                    'export_format': export_format,
+                    'operations': st.session_state.data_processor.get_processing_log()
+                }
+
+                # Send email
+                success = st.session_state.email_service.send_processed_data(
+                    recipient_email, df, metadata, export_format
+                )
+
+                if success:
+                    st.success(f"✅ Email sent successfully to {recipient_email}!")
+                else:
+                    st.error("❌ Failed to send email")
 
     # Download section
     st.markdown("### 💾 Download Data")
@@ -767,47 +663,38 @@ def render_share_results():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📥 Download CSV", help="Download the processed data as a CSV file."):
-            try:
-                csv_data = df.to_csv(index=False)
-                st.download_button(
-                    label="💾 Download CSV File",
-                    data=csv_data,
-                    file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
-            except Exception as e:
-                st.error(f"Error downloading CSV: {e}")
+        if st.button("📥 Download CSV"):
+            csv_data = df.to_csv(index=False)
+            st.download_button(
+                label="💾 Download CSV File",
+                data=csv_data,
+                file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
 
     with col2:
-        if st.button("📥 Download Excel", help="Download the processed data as an Excel file."):
-            try:
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df.to_excel(writer, index=False,
-                                sheet_name='Processed_Data')
-                excel_data = output.getvalue()
-                st.download_button(
-                    label="💾 Download Excel File",
-                    data=excel_data,
-                    file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            except Exception as e:
-                st.error(f"Error downloading Excel: {e}")
+        if st.button("📥 Download Excel"):
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Processed_Data')
+            excel_data = output.getvalue()
+
+            st.download_button(
+                label="💾 Download Excel File",
+                data=excel_data,
+                file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     with col3:
-        if st.button("📥 Download JSON", help="Download the processed data as a JSON file."):
-            try:
-                json_data = df.to_json(orient='records', indent=2)
-                st.download_button(
-                    label="💾 Download JSON File",
-                    data=json_data,
-                    file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
-            except Exception as e:
-                st.error(f"Error downloading JSON: {e}")
+        if st.button("📥 Download JSON"):
+            json_data = df.to_json(orient='records', indent=2)
+            st.download_button(
+                label="💾 Download JSON File",
+                data=json_data,
+                file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
 
     # Data preview
     st.markdown("### 👀 Data Preview")
@@ -820,20 +707,19 @@ def render_share_results():
     else:
         st.info("No numeric columns available for statistical summary")
 
-
 def main():
     # Load custom CSS
     load_custom_css()
-
+    
     # Initialize session state
     init_session_state()
-
+    
     # Render header
     render_header()
-
+    
     # Render sidebar and get selected page
     selected_page = render_sidebar()
-
+    
     # Route to appropriate page
     if selected_page == "🏠 Home":
         render_home()
@@ -847,7 +733,6 @@ def main():
         render_database()
     elif selected_page == "📧 Share Results":
         render_share_results()
-
 
 if __name__ == "__main__":
     main()

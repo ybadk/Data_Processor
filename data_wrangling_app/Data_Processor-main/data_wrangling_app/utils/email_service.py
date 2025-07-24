@@ -285,13 +285,6 @@ class EmailService:
     def _generate_summary_report(self, df: pd.DataFrame, metadata: Dict[str, Any]) -> str:
         """Generate a text summary report"""
         try:
-            mem_usage = df.memory_usage(deep=True).sum()
-            if isinstance(mem_usage, (bytes, bytearray)):
-                mb = len(mem_usage) / 1024 / 1024
-            elif isinstance(mem_usage, (int, float)):
-                mb = mem_usage / 1024 / 1024
-            else:
-                mb = 0
             report = f"""
 DATA PROCESSING SUMMARY REPORT
 {self.company_name}
@@ -302,7 +295,7 @@ DATASET INFORMATION:
 - Original Rows: {metadata.get('original_rows', len(df)):,}
 - Final Rows: {len(df):,}
 - Columns: {len(df.columns)}
-- Memory Usage: {mb:.2f} MB
+- Memory Usage: {df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB
 
 COLUMN INFORMATION:
 {chr(10).join([f"- {col}: {str(df[col].dtype)}" for col in df.columns])}

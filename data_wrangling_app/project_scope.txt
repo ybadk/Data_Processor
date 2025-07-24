@@ -1,0 +1,13 @@
+you are an expert python , fullstack web and streamlit developer 
+scan the folders in coding practices and use the intel to give yourself a ciding advantage 
+scan my app app to get the basic idea of what the app does.
+create a script that will re-run this streamlit app whem the is no activity to avoid the app sleeping on the streamlit platform in ned the app online 24/7.
+add form for user with files larger than 500MB to be sent to the developer directly for data wrangling and visualization, add a special requests portion to the form for any specific instructions on how to handle the data.
+the database is flawed with type errors, create a simple database with a json backend that can be queried by the user,avoid complications keep it simple.
+edit the user input component on the sidebar,add a company name component, industry and country of origin or just make a form that can be submitted to the developer as well.
+make sure that all the forms explain that the developer accepts PAYSHAP and PayPal payments.
+the app is filled with bright colors, make the UI a bit darker with a modern business app look.
+make sure your data base incorporates datasets and formats that work well in streamlit to avoid runttime,syntax and tyoe errors.
+This is a MVP for my portfolio avoid errors at all costs.
+finish the whole project and follow my instructions without asking for confirmation until yoou are done.
+you are modifying and adding changes to the app not rebuilding the whole app so dont chang the app beyond recognition.
