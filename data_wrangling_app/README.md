@@ -176,43 +176,6 @@ Open your browser and navigate to `http://localhost:8501`
 - `streamlit-lottie` - Animations
 - `extra-streamlit-components` - Additional widgets
 
-## 🚀 Deployment Instructions
-
-### Local Deployment
-1. Clone the repository and install dependencies:
-   ```bash
-   git clone <repository-url>
-   cd data_wrangling_app
-   pip install -r requirements.txt
-   ```
-2. Set environment variables (create a .env file or set in your shell):
-   ```bash
-   EMAIL_USER=your-email@gmail.com
-   EMAIL_PASSWORD=your-app-password
-   SECRET_KEY=your-secret-key
-   SMTP_SERVER=smtp.gmail.com
-   SMTP_PORT=587
-   ```
-3. Run the app:
-   ```bash
-   streamlit run app.py
-   ```
-
-### Streamlit Cloud Deployment
-1. Push your code to a GitHub repository.
-2. Go to [Streamlit Cloud](https://streamlit.io/cloud) and connect your repo.
-3. Set the following environment variables in the Streamlit Cloud app settings:
-   - EMAIL_USER
-   - EMAIL_PASSWORD
-   - SECRET_KEY
-   - SMTP_SERVER
-   - SMTP_PORT
-4. Deploy with one click and access your app online.
-
-### Notes
-- For email features, use an app password if using Gmail and enable "less secure apps" or use OAuth2.
-- For production, use strong secrets and secure your credentials.
-
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -267,22 +230,6 @@ This project is proprietary software developed by Profit Projects Online Virtual
 - **v1.0.0** - Initial release with core functionality
 - **v1.1.0** - Enhanced visualizations and email integration
 - **v1.2.0** - Database management and search features
-
-## 🐞 Known Issues
-- Email sending may fail if SMTP credentials are not set or are incorrect. Use a test account for first-time setup.
-- PDF and DOCX parsing may not extract all content perfectly, especially with complex formatting.
-- Large files (>50MB) may cause slowdowns or memory errors depending on your system.
-- Some advanced Excel features (macros, formulas) are not supported.
-- The app is designed for single-user or small team use; multi-user concurrency is not fully tested.
-
-## 🚧 Future Work
-- Add user authentication and role-based access control.
-- Support for additional file types (e.g., XML, Parquet).
-- More advanced data transformation options (custom formulas, pivot tables).
-- Enhanced visualization options (geospatial, network graphs).
-- Automated scheduled email reports.
-- Integration with cloud storage (Google Drive, Dropbox).
-- Improved mobile responsiveness and accessibility.
 
 ---
 

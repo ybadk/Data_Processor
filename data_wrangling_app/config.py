@@ -13,7 +13,7 @@ ENTERPRISE_NUMBER = "K2025200646"
 COMPANY_LOCATION = "Pretoria, Gauteng Province, South Africa"
 
 # Application Settings
-APP_TITLE = "Data Wrangling & Analytics Platform"
+APP_TITLE = "DWAP"
 APP_ICON = "📊"
 PAGE_CONFIG = {
     "page_title": APP_TITLE,
@@ -69,7 +69,8 @@ DEFAULT_ENCODING = 'utf-8'
 # Visualization Settings
 PLOT_HEIGHT = 400
 PLOT_WIDTH = 800
-COLOR_PALETTE = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
+COLOR_PALETTE = ['0000CD', '#000088',
+                 '#00FFFF', '#000080', '#ADD8E6', '#87CEFA']
 
 # Security Settings
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
