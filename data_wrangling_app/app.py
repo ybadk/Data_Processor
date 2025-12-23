@@ -2,30 +2,51 @@
 Data Wrangling & Analytics Platform
 Profit Projects Online Virtual Assistance
 
-A comprehensive data processing and visualization application built with Streamlit
+A comprehensive data processing, machine learning, and visualization application built with Streamlit
 """
 
+# Machine Learning and Deep Learning imports
+from utils.visualizations import VisualizationEngine
+from utils.email_service import EmailService
+from utils.database import DatabaseManager
+from utils.data_processor import DataProcessor
+from config import *
 from sklearn import linear_model
+from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, Lasso
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor, GradientBoostingClassifier
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
+from sklearn.svm import SVC, SVR
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neural_network import MLPClassifier, MLPRegressor
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, LabelEncoder, PolynomialFeatures
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, classification_report, confusion_matrix, silhouette_score
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
+from sklearn.covariance import EllipticEnvelope
+from scipy.special import expit as activation_function
+from scipy.stats import truncnorm
 
+# App Modules
 import streamlit as st
 import pandas as pd
 import numpy as np
 from streamlit_option_menu import option_menu
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime
 import time
 import json
 import io
 import base64
 from typing import Dict, List, Any, Optional
+import warnings
+warnings.filterwarnings('ignore')
 
 # Import custom modules
-from config import *
-from utils.data_processor import DataProcessor
-from utils.database import DatabaseManager
-from utils.email_service import EmailService
-from utils.visualizations import VisualizationEngine
 
 # Configure Streamlit page
 st.set_page_config(**PAGE_CONFIG)
@@ -147,6 +168,17 @@ def init_session_state():
         st.session_state.processing_complete = False
     if "user_email" not in st.session_state:
         st.session_state.user_email = ""
+    # ML Model states
+    if "ml_model" not in st.session_state:
+        st.session_state.ml_model = None
+    if "ml_predictions" not in st.session_state:
+        st.session_state.ml_predictions = None
+    if "feature_engineered_data" not in st.session_state:
+        st.session_state.feature_engineered_data = None
+    if "trained_models" not in st.session_state:
+        st.session_state.trained_models = {}
+    if "model_metrics" not in st.session_state:
+        st.session_state.model_metrics = {}
 
 
 # Loading animation
@@ -201,7 +233,7 @@ def render_header():
   </div>
   <div class="tooltip-content">
     <div class="social-icons">
-      <a href="#" class="social-icon twitter">
+      <a href="https://twitter.com/intent/tweet?text=Check%20out%20this%20amazing%20Data%20Wrangling%20Platform%20by%20Profit%20Projects%20Online!&url=https://profitprojectsonline.com" target="_blank" class="social-icon twitter">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -213,7 +245,7 @@ def render_header():
           ></path>
         </svg>
       </a>
-      <a href="#" class="social-icon facebook">
+      <a href="https://www.facebook.com/sharer/sharer.php?u=https://profitprojectsonline.com" target="_blank" class="social-icon facebook">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -225,7 +257,7 @@ def render_header():
           ></path>
         </svg>
       </a>
-      <a href="#" class="social-icon linkedin">
+      <a href="https://www.linkedin.com/sharing/share-offsite/?url=https://profitprojectsonline.com" target="_blank" class="social-icon linkedin">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -653,15 +685,17 @@ def render_sidebar():
         selected = option_menu(
             menu_title="Navigation",
             options=[
-                "🏠 Home",
-                "📤 Upload Data",
-                "🔧 Process Data",
-                "📊 Dashboard",
-                "💾 Database",
-                "📧 Share Results",
+                "Home",
+                "Upload Data",
+                "Process Data",
+                "Feature Engineering",
+                "Machine Learning",
+                "Dashboard",
+                "Database",
+                "Share Results",
             ],
-            icons=["house", "upload", "gear",
-                   "bar-chart", "database", "envelope"],
+            icons=["house", "upload", "gear", "sliders",
+                   "robot", "bar-chart", "database", "envelope"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -715,25 +749,25 @@ def render_sidebar():
     <p>Python Web Developer</p>
   </div>
   <div class="socialbar">
-    <a id="github" href="#"><svg viewBox="0 0 16 16" class="bi bi-github" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
+    <a id="github" href="https://github.com/profitprojectsonline" target="_blank"><svg viewBox="0 0 16 16" class="bi bi-github" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
   <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
 </svg></a>
     &nbsp;
     &nbsp;
     &nbsp;
-    <a id="instagram" href="#"><svg viewBox="0 0 16 16" class="bi bi-instagram" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
+    <a id="instagram" href="https://instagram.com/profitprojectsonline" target="_blank"><svg viewBox="0 0 16 16" class="bi bi-instagram" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
   <path d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.917 3.917 0 0 0-1.417.923A3.927 3.927 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.7.01 5.555 0 5.827 0 8.001c0 2.172.01 2.444.048 3.297.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.298-.048c.851-.04 1.434-.174 1.943-.372a3.916 3.916 0 0 0 1.416-.923c.445-.445.718-.891.923-1.417.197-.509.332-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.445-.048-3.299c-.04-.851-.175-1.433-.372-1.941a3.926 3.926 0 0 0-.923-1.417A3.911 3.911 0 0 0 13.24.42c-.51-.198-1.092-.333-1.943-.372C10.443.01 10.172 0 7.998 0h.003zm-.717 1.442h.718c2.136 0 2.389.007 3.232.046.78.035 1.204.166 1.486.275.373.145.64.319.92.599.28.28.453.546.598.92.11.281.24.705.275 1.485.039.843.047 1.096.047 3.231s-.008 2.389-.047 3.232c-.035.78-.166 1.203-.275 1.485a2.47 2.47 0 0 1-.599.919c-.28.28-.546.453-.92.598-.28.11-.704.24-1.485.276-.843.038-1.096.047-3.232.047s-2.39-.009-3.233-.047c-.78-.036-1.203-.166-1.485-.276a2.478 2.478 0 0 1-.92-.598 2.48 2.48 0 0 1-.6-.92c-.109-.281-.24-.705-.275-1.485-.038-.843-.046-1.096-.046-3.233 0-2.136.008-2.388.046-3.231.036-.78.166-1.204.276-1.486.145-.373.319-.64.599-.92.28-.28.546-.453.92-.598.282-.11.705-.24 1.485-.276.738-.034 1.024-.044 2.515-.045v.002zm4.988 1.328a.96.96 0 1 0 0 1.92.96.96 0 0 0 0-1.92zm-4.27 1.122a4.109 4.109 0 1 0 0 8.217 4.109 4.109 0 0 0 0-8.217zm0 1.441a2.667 2.667 0 1 1 0 5.334 2.667 2.667 0 0 1 0-5.334z"></path>
 </svg></a>
     &nbsp;
     &nbsp;
     &nbsp;
-    <a id="facebook" href="#"><svg viewBox="0 0 16 16" class="bi bi-facebook" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
+    <a id="facebook" href="https://facebook.com/profitprojectsonline" target="_blank"><svg viewBox="0 0 16 16" class="bi bi-facebook" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
   <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z"></path>
 </svg></a>
     &nbsp;
     &nbsp;
     &nbsp;
-    <a id="twitter" href="#"><svg viewBox="0 0 16 16" class="bi bi-twitter" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
+    <a id="twitter" href="https://twitter.com/profitprojects" target="_blank"><svg viewBox="0 0 16 16" class="bi bi-twitter" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
   <path d="M5.026 15c6.038 0 9.341-5.003 9.341-9.334 0-.14 0-.282-.006-.422A6.685 6.685 0 0 0 16 3.542a6.658 6.658 0 0 1-1.889.518 3.301 3.301 0 0 0 1.447-1.817 6.533 6.533 0 0 1-2.087.793A3.286 3.286 0 0 0 7.875 6.03a9.325 9.325 0 0 1-6.767-3.429 3.289 3.289 0 0 0 1.018 4.382A3.323 3.323 0 0 1 .64 6.575v.045a3.288 3.288 0 0 0 2.632 3.218 3.203 3.203 0 0 1-.865.115 3.23 3.23 0 0 1-.614-.057 3.283 3.283 0 0 0 3.067 2.277A6.588 6.588 0 0 1 .78 13.58a6.32 6.32 0 0 1-.78-.045A9.344 9.344 0 0 0 5.026 15z"></path>
 </svg></a>
     </div></center>
@@ -1282,239 +1316,101 @@ def render_home():
   <input checked="" id="tab-2" name="slider" type="radio" />
   <input id="tab-3" name="slider" type="radio" />
   <header>
-    <label class="tab-1" for="tab-1">Basic</label>
-    <label class="tab-2" for="tab-2">Standard</label>
-    <label class="tab-3" for="tab-3">Team</label>
+    <label class="tab-1" for="tab-1">Starter</label>
+    <label class="tab-2" for="tab-2">Professional</label>
+    <label class="tab-3" for="tab-3">Enterprise</label>
     <div class="slider"></div>
   </header>
   <div class="card-area">
     <div class="cards">
       <div class="row row-1">
         <div class="price-details">
-          <span class="price">150</span>
-          <p>For beginner use</p>
+          <span class="price">299</span>
+          <p>Data Wrangling Package</p>
         </div>
         <ul class="features">
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            <span>Unlimited nvme-SSD Storage (5GB) </span>
+            <span>Data Cleaning &amp; Preprocessing</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>FREE 50+ Installation Scripts WordPress Supported</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Missing Value Treatment</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span
-              >One FREE Domain Registration .com and .np extensions only</span
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Basic Data Visualization (5 charts)</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>Unlimited Email Accounts &amp; Databases</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>CSV/Excel Export Support</span>
           </li>
         </ul>
       </div>
       <div class="row">
         <div class="price-details">
-          <span class="price">499</span>
-          <p>For professional use</p>
+          <span class="price">799</span>
+          <p>Data Science Package</p>
         </div>
         <ul class="features">
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>Unlimited GB Premium Bandwidth</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>All Starter Features Included</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>FREE 200+ Installation Scripts WordPress Supported</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Feature Engineering &amp; Selection</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span
-              >Five FREE Domain Registration .com and .np extensions only</span
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Machine Learning Model Training</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>Unlimited Email Accounts &amp; Databases</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Interactive Dashboard Reports</span>
           </li>
         </ul>
       </div>
       <div class="row">
         <div class="price-details">
-          <span class="price">1999</span>
-          <p>For team collaboration</p>
+          <span class="price">2499</span>
+          <p>Enterprise AI Package</p>
         </div>
         <ul class="features">
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>200 GB Premium Bandwidth</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>All Professional Features</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>FREE 100+ Installation Scripts WordPress Supported</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Deep Learning &amp; Neural Networks</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span
-              >Two FREE Domain Registration .com and .np extensions only</span
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Predictive Analytics &amp; Forecasting</span>
           </li>
           <li>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline></svg
-            ><span>Unlimited Email Accounts &amp; Databases</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white text-2xs bg-green-500 rounded-full mr-2 p-1">
+              <polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Custom API &amp; Model Deployment</span>
           </li>
         </ul>
       </div>
     </div>
   </div>
-  <button>Choose plan</button>
+  <button>Contact Us</button>
 </div>
 
 <style>
@@ -2206,6 +2102,445 @@ def render_share_results():
         st.info("No numeric columns available for statistical summary")
 
 
+# Feature Engineering page
+def render_feature_engineering():
+    st.markdown("## 🔬 Feature Engineering")
+    st.divider()
+
+    if st.session_state.current_data is None:
+        st.warning("⚠️ Please upload data first!")
+        return
+
+    df = st.session_state.current_data.copy()
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+
+    # Feature Engineering Options
+    st.markdown("### 🛠️ Feature Engineering Tools")
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Scaling & Normalization",
+        "🔢 Polynomial Features",
+        "🏷️ Encoding",
+        "🎯 Feature Selection",
+        "🔍 Outlier Detection"
+    ])
+
+    with tab1:
+        st.markdown("#### Scaling & Normalization")
+        if not numeric_cols:
+            st.warning("No numeric columns available for scaling")
+        else:
+            scaling_method = st.selectbox(
+                "Select Scaling Method",
+                ["Standard Scaler (Z-score)", "Min-Max Scaler", "Robust Scaler"]
+            )
+            cols_to_scale = st.multiselect("Select columns to scale", numeric_cols, default=numeric_cols[:3] if len(numeric_cols) >= 3 else numeric_cols)
+
+            if st.button("Apply Scaling", key="apply_scaling"):
+                if cols_to_scale:
+                    if scaling_method == "Standard Scaler (Z-score)":
+                        scaler = StandardScaler()
+                    elif scaling_method == "Min-Max Scaler":
+                        scaler = MinMaxScaler()
+                    else:
+                        scaler = RobustScaler()
+
+                    scaled_data = scaler.fit_transform(df[cols_to_scale])
+                    for i, col in enumerate(cols_to_scale):
+                        df[f"{col}_scaled"] = scaled_data[:, i]
+
+                    st.session_state.feature_engineered_data = df
+                    st.success(f"✅ Applied {scaling_method} to {len(cols_to_scale)} columns!")
+
+                    # Show before/after comparison
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Original Data**")
+                        st.dataframe(df[cols_to_scale].head())
+                    with col2:
+                        st.markdown("**Scaled Data**")
+                        st.dataframe(df[[f"{c}_scaled" for c in cols_to_scale]].head())
+
+    with tab2:
+        st.markdown("#### Polynomial Features")
+        if not numeric_cols:
+            st.warning("No numeric columns available for polynomial features")
+        else:
+            poly_cols = st.multiselect("Select columns for polynomial features", numeric_cols, default=numeric_cols[:2] if len(numeric_cols) >= 2 else numeric_cols)
+            degree = st.slider("Polynomial Degree", 2, 5, 2)
+            include_interaction = st.checkbox("Include interaction features only", value=False)
+
+            if st.button("Generate Polynomial Features", key="gen_poly"):
+                if poly_cols:
+                    poly = PolynomialFeatures(degree=degree, include_bias=False, interaction_only=include_interaction)
+                    poly_data = poly.fit_transform(df[poly_cols])
+                    feature_names = poly.get_feature_names_out(poly_cols)
+
+                    poly_df = pd.DataFrame(poly_data, columns=feature_names)
+                    st.success(f"✅ Generated {len(feature_names)} polynomial features!")
+                    st.dataframe(poly_df.head())
+
+                    # Merge with original data
+                    for col in poly_df.columns:
+                        if col not in df.columns:
+                            df[col] = poly_df[col].values
+                    st.session_state.feature_engineered_data = df
+
+    with tab3:
+        st.markdown("#### Categorical Encoding")
+        if not categorical_cols:
+            st.warning("No categorical columns available for encoding")
+        else:
+            encoding_method = st.selectbox(
+                "Select Encoding Method",
+                ["Label Encoding", "One-Hot Encoding", "Ordinal Encoding"]
+            )
+            cols_to_encode = st.multiselect("Select columns to encode", categorical_cols)
+
+            if st.button("Apply Encoding", key="apply_encoding"):
+                if cols_to_encode:
+                    if encoding_method == "Label Encoding":
+                        le = LabelEncoder()
+                        for col in cols_to_encode:
+                            df[f"{col}_encoded"] = le.fit_transform(df[col].astype(str))
+                    elif encoding_method == "One-Hot Encoding":
+                        encoded_df = pd.get_dummies(df[cols_to_encode], prefix=cols_to_encode)
+                        df = pd.concat([df, encoded_df], axis=1)
+
+                    st.session_state.feature_engineered_data = df
+                    st.success(f"✅ Applied {encoding_method} to {len(cols_to_encode)} columns!")
+                    st.dataframe(df.head())
+
+    with tab4:
+        st.markdown("#### Feature Selection")
+        if len(numeric_cols) < 2:
+            st.warning("Need at least 2 numeric columns for feature selection")
+        else:
+            target_col = st.selectbox("Select Target Column", numeric_cols)
+            feature_cols = [c for c in numeric_cols if c != target_col]
+            k_features = st.slider("Number of features to select", 1, len(feature_cols), min(5, len(feature_cols)))
+
+            if st.button("Analyze Feature Importance", key="feat_importance"):
+                X = df[feature_cols].fillna(0)
+                y = df[target_col].fillna(0)
+
+                selector = SelectKBest(score_func=f_classif, k=k_features)
+                selector.fit(X, y)
+
+                scores = pd.DataFrame({
+                    'Feature': feature_cols,
+                    'Score': selector.scores_
+                }).sort_values('Score', ascending=False)
+
+                # Create bar chart
+                fig = go.Figure(data=[
+                    go.Bar(x=scores['Feature'], y=scores['Score'], marker_color='#0000CD')
+                ])
+                fig.update_layout(
+                    title="Feature Importance Scores",
+                    xaxis_title="Features",
+                    yaxis_title="Score",
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.markdown("**Top Features:**")
+                st.dataframe(scores.head(k_features))
+
+    with tab5:
+        st.markdown("#### Outlier Detection")
+        if not numeric_cols:
+            st.warning("No numeric columns available for outlier detection")
+        else:
+            outlier_col = st.selectbox("Select column for outlier detection", numeric_cols)
+            method = st.selectbox("Detection Method", ["IQR Method", "Elliptic Envelope", "Z-Score"])
+
+            if st.button("Detect Outliers", key="detect_outliers"):
+                col_data = df[outlier_col].dropna()
+
+                if method == "IQR Method":
+                    Q1 = col_data.quantile(0.25)
+                    Q3 = col_data.quantile(0.75)
+                    IQR = Q3 - Q1
+                    lower_bound = Q1 - 1.5 * IQR
+                    upper_bound = Q3 + 1.5 * IQR
+                    outliers = (col_data < lower_bound) | (col_data > upper_bound)
+                elif method == "Elliptic Envelope":
+                    detector = EllipticEnvelope(contamination=0.1, random_state=42)
+                    predictions = detector.fit_predict(col_data.values.reshape(-1, 1))
+                    outliers = predictions == -1
+                else:  # Z-Score
+                    z_scores = (col_data - col_data.mean()) / col_data.std()
+                    outliers = np.abs(z_scores) > 3
+
+                n_outliers = outliers.sum()
+                st.info(f"Found {n_outliers} outliers ({n_outliers/len(col_data)*100:.1f}%)")
+
+                # Visualization
+                fig = go.Figure()
+                fig.add_trace(go.Box(y=col_data, name=outlier_col, marker_color='#0000CD'))
+                fig.update_layout(title=f"Box Plot - {outlier_col}", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
+
+    # Save engineered features
+    st.divider()
+    if st.session_state.feature_engineered_data is not None:
+        st.markdown("### 💾 Save Engineered Features")
+        if st.button("Apply to Current Dataset"):
+            st.session_state.current_data = st.session_state.feature_engineered_data
+            st.success("✅ Feature engineered data saved to current dataset!")
+
+
+# Machine Learning page
+def render_machine_learning():
+    st.markdown("## 🤖 Machine Learning Models")
+    st.divider()
+
+    if st.session_state.current_data is None:
+        st.warning("⚠️ Please upload data first!")
+        return
+
+    df = st.session_state.current_data.copy()
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+    if len(numeric_cols) < 2:
+        st.warning("⚠️ Need at least 2 numeric columns for ML models")
+        return
+
+    # ML Model tabs
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📈 Regression",
+        "🎯 Classification",
+        "🔮 Clustering",
+        "🧠 Neural Networks"
+    ])
+
+    with tab1:
+        st.markdown("### 📈 Regression Models")
+        target_col = st.selectbox("Select Target Variable", numeric_cols, key="reg_target")
+        feature_cols = st.multiselect("Select Feature Variables", [c for c in numeric_cols if c != target_col], key="reg_features")
+
+        model_type = st.selectbox("Select Model", [
+            "Linear Regression",
+            "Ridge Regression",
+            "Lasso Regression",
+            "Random Forest Regressor",
+            "Gradient Boosting Regressor",
+            "K-Neighbors Regressor",
+            "Decision Tree Regressor",
+            "MLP Regressor"
+        ])
+
+        test_size = st.slider("Test Size (%)", 10, 40, 20, key="reg_test") / 100
+
+        if st.button("Train Regression Model", key="train_reg"):
+            if feature_cols:
+                X = df[feature_cols].fillna(0)
+                y = df[target_col].fillna(0)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+
+                # Select and train model
+                if model_type == "Linear Regression":
+                    model = LinearRegression()
+                elif model_type == "Ridge Regression":
+                    model = Ridge(alpha=1.0)
+                elif model_type == "Lasso Regression":
+                    model = Lasso(alpha=1.0)
+                elif model_type == "Random Forest Regressor":
+                    model = RandomForestRegressor(n_estimators=100, random_state=42)
+                elif model_type == "Gradient Boosting Regressor":
+                    model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+                elif model_type == "K-Neighbors Regressor":
+                    model = KNeighborsRegressor(n_neighbors=5)
+                elif model_type == "Decision Tree Regressor":
+                    model = DecisionTreeRegressor(random_state=42)
+                else:
+                    model = MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
+
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+
+                # Metrics
+                mse = mean_squared_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+
+                st.session_state.trained_models['regression'] = model
+                st.session_state.model_metrics['regression'] = {'MSE': mse, 'R2': r2}
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Mean Squared Error", f"{mse:.4f}")
+                with col2:
+                    st.metric("R² Score", f"{r2:.4f}")
+
+                # Visualization
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', name='Predictions', marker=dict(color='#0000CD')))
+                fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()], mode='lines', name='Perfect Fit', line=dict(color='red', dash='dash')))
+                fig.update_layout(title="Actual vs Predicted", xaxis_title="Actual", yaxis_title="Predicted", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Feature importance for tree-based models
+                if hasattr(model, 'feature_importances_'):
+                    importance_df = pd.DataFrame({'Feature': feature_cols, 'Importance': model.feature_importances_}).sort_values('Importance', ascending=False)
+                    fig_imp = go.Figure(data=[go.Bar(x=importance_df['Feature'], y=importance_df['Importance'], marker_color='#0000CD')])
+                    fig_imp.update_layout(title="Feature Importance", template="plotly_dark")
+                    st.plotly_chart(fig_imp, use_container_width=True)
+
+    with tab2:
+        st.markdown("### 🎯 Classification Models")
+        st.info("For classification, ensure your target variable has discrete classes")
+
+        target_col_cls = st.selectbox("Select Target Variable", df.columns.tolist(), key="cls_target")
+        feature_cols_cls = st.multiselect("Select Feature Variables", numeric_cols, key="cls_features")
+
+        cls_model_type = st.selectbox("Select Model", [
+            "Logistic Regression",
+            "Random Forest Classifier",
+            "Gradient Boosting Classifier",
+            "K-Neighbors Classifier",
+            "Decision Tree Classifier",
+            "Naive Bayes",
+            "SVM Classifier",
+            "MLP Classifier"
+        ])
+
+        if st.button("Train Classification Model", key="train_cls"):
+            if feature_cols_cls:
+                X = df[feature_cols_cls].fillna(0)
+                y = LabelEncoder().fit_transform(df[target_col_cls].fillna('Unknown'))
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+                if cls_model_type == "Logistic Regression":
+                    model = LogisticRegression(max_iter=1000)
+                elif cls_model_type == "Random Forest Classifier":
+                    model = RandomForestClassifier(n_estimators=100, random_state=42)
+                elif cls_model_type == "Gradient Boosting Classifier":
+                    model = GradientBoostingClassifier(n_estimators=100, random_state=42)
+                elif cls_model_type == "K-Neighbors Classifier":
+                    model = KNeighborsClassifier(n_neighbors=5)
+                elif cls_model_type == "Decision Tree Classifier":
+                    model = DecisionTreeClassifier(random_state=42)
+                elif cls_model_type == "Naive Bayes":
+                    model = GaussianNB()
+                elif cls_model_type == "SVM Classifier":
+                    model = SVC(kernel='rbf', random_state=42)
+                else:
+                    model = MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
+
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+                accuracy = accuracy_score(y_test, y_pred)
+
+                st.session_state.trained_models['classification'] = model
+                st.metric("Accuracy", f"{accuracy:.2%}")
+
+                # Confusion Matrix
+                cm = confusion_matrix(y_test, y_pred)
+                fig_cm = go.Figure(data=go.Heatmap(z=cm, colorscale='Blues', text=cm, texttemplate='%{text}'))
+                fig_cm.update_layout(title="Confusion Matrix", xaxis_title="Predicted", yaxis_title="Actual", template="plotly_dark")
+                st.plotly_chart(fig_cm, use_container_width=True)
+
+    with tab3:
+        st.markdown("### 🔮 Clustering Models")
+        cluster_cols = st.multiselect("Select Features for Clustering", numeric_cols, key="cluster_features")
+        cluster_method = st.selectbox("Select Algorithm", ["K-Means", "DBSCAN", "Hierarchical"])
+
+        if cluster_method == "K-Means":
+            n_clusters = st.slider("Number of Clusters", 2, 10, 3)
+
+        if st.button("Perform Clustering", key="perform_cluster"):
+            if len(cluster_cols) >= 2:
+                X = df[cluster_cols].fillna(0)
+                scaler = StandardScaler()
+                X_scaled = scaler.fit_transform(X)
+
+                if cluster_method == "K-Means":
+                    model = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                elif cluster_method == "DBSCAN":
+                    model = DBSCAN(eps=0.5, min_samples=5)
+                else:
+                    model = AgglomerativeClustering(n_clusters=3)
+
+                clusters = model.fit_predict(X_scaled)
+                df['Cluster'] = clusters
+
+                if len(set(clusters)) > 1:
+                    silhouette = silhouette_score(X_scaled, clusters)
+                    st.metric("Silhouette Score", f"{silhouette:.4f}")
+
+                # PCA for visualization
+                pca = PCA(n_components=2)
+                X_pca = pca.fit_transform(X_scaled)
+
+                fig = go.Figure()
+                for cluster in set(clusters):
+                    mask = clusters == cluster
+                    fig.add_trace(go.Scatter(x=X_pca[mask, 0], y=X_pca[mask, 1], mode='markers', name=f'Cluster {cluster}'))
+                fig.update_layout(title="Cluster Visualization (PCA)", xaxis_title="PC1", yaxis_title="PC2", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.markdown("**Cluster Distribution:**")
+                cluster_counts = pd.Series(clusters).value_counts().sort_index()
+                st.bar_chart(cluster_counts)
+
+    with tab4:
+        st.markdown("### 🧠 Neural Network")
+        st.info("Configure a Multi-Layer Perceptron neural network")
+
+        nn_target = st.selectbox("Select Target", numeric_cols, key="nn_target")
+        nn_features = st.multiselect("Select Features", [c for c in numeric_cols if c != nn_target], key="nn_features")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            hidden_layers = st.text_input("Hidden Layer Sizes (comma-separated)", "100,50")
+            max_iterations = st.slider("Max Iterations", 100, 1000, 500)
+        with col2:
+            learning_rate = st.select_slider("Learning Rate", options=[0.0001, 0.001, 0.01, 0.1], value=0.001)
+            activation = st.selectbox("Activation Function", ["relu", "tanh", "logistic"])
+
+        task_type = st.radio("Task Type", ["Regression", "Classification"], horizontal=True)
+
+        if st.button("Train Neural Network", key="train_nn"):
+            if nn_features:
+                X = df[nn_features].fillna(0)
+                y = df[nn_target].fillna(0)
+
+                hidden = tuple(int(x.strip()) for x in hidden_layers.split(','))
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+                scaler = StandardScaler()
+                X_train_scaled = scaler.fit_transform(X_train)
+                X_test_scaled = scaler.transform(X_test)
+
+                if task_type == "Regression":
+                    model = MLPRegressor(hidden_layer_sizes=hidden, max_iter=max_iterations, learning_rate_init=learning_rate, activation=activation, random_state=42)
+                    model.fit(X_train_scaled, y_train)
+                    y_pred = model.predict(X_test_scaled)
+                    mse = mean_squared_error(y_test, y_pred)
+                    r2 = r2_score(y_test, y_pred)
+                    st.metric("MSE", f"{mse:.4f}")
+                    st.metric("R² Score", f"{r2:.4f}")
+                else:
+                    y_encoded = LabelEncoder().fit_transform(y)
+                    y_train_enc = LabelEncoder().fit_transform(y_train)
+                    y_test_enc = LabelEncoder().fit_transform(y_test)
+                    model = MLPClassifier(hidden_layer_sizes=hidden, max_iter=max_iterations, learning_rate_init=learning_rate, activation=activation, random_state=42)
+                    model.fit(X_train_scaled, y_train_enc)
+                    y_pred = model.predict(X_test_scaled)
+                    acc = accuracy_score(y_test_enc, y_pred)
+                    st.metric("Accuracy", f"{acc:.2%}")
+
+                st.session_state.trained_models['neural_network'] = model
+
+                # Loss curve
+                if hasattr(model, 'loss_curve_'):
+                    fig_loss = go.Figure(data=go.Scatter(y=model.loss_curve_, mode='lines', line=dict(color='#0000CD')))
+                    fig_loss.update_layout(title="Training Loss Curve", xaxis_title="Iteration", yaxis_title="Loss", template="plotly_dark")
+                    st.plotly_chart(fig_loss, use_container_width=True)
+
+
 def main():
     # Load custom CSS
     load_custom_css()
@@ -2220,17 +2555,21 @@ def main():
     selected_page = render_sidebar()
 
     # Route to appropriate page
-    if selected_page == "🏠 Home":
+    if selected_page == "Home":
         render_home()
-    elif selected_page == "📤 Upload Data":
+    elif selected_page == "Upload Data":
         render_upload()
-    elif selected_page == "🔧 Process Data":
+    elif selected_page == "Process Data":
         render_process()
-    elif selected_page == "📊 Dashboard":
+    elif selected_page == "Feature Engineering":
+        render_feature_engineering()
+    elif selected_page == "Machine Learning":
+        render_machine_learning()
+    elif selected_page == "Dashboard":
         render_dashboard()
-    elif selected_page == "💾 Database":
+    elif selected_page == "Database":
         render_database()
-    elif selected_page == "📧 Share Results":
+    elif selected_page == "Share Results":
         render_share_results()
 
 
