@@ -1,0 +1,67 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+.dist/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*_temp.py
+*.log
+
+# Test files
+test_*.py
+*_test.py
+
+# Documentation (if not needed)
+*SUMMARY*.md
+*REPORT*.md
+*GUIDE*.md
+*INDEX*.md
+*COMPLETION*.md
+*TRANSFORMATION*.md
+*ENHANCEMENTS*.md
+*REFERENCE*.md
+
+# Project specific
+project_scope.txt
+*.jpg
+*.png
+*.gif
+

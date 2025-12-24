@@ -95,21 +95,7 @@ def load_custom_css():
         transform: translateY(-5px);
     }
 
-    /* Floating Metrics Overlay */
-    .metrics-overlay {
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
-        border: 2px solid #0000CD;
-        border-radius: 15px;
-        padding: 20px;
-        box-shadow: 0 8px 32px rgba(0, 0, 205, 0.3);
-        z-index: 9999;
-        max-width: 350px;
-        animation: slideIn 0.5s ease-out;
-    }
-
+    /* slideIn animation kept for notifications */
     @keyframes slideIn {
         from {
             transform: translateX(400px);
@@ -119,53 +105,6 @@ def load_custom_css():
             transform: translateX(0);
             opacity: 1;
         }
-    }
-
-    .metrics-overlay-header {
-        color: #0000CD;
-        font-size: 18px;
-        font-weight: bold;
-        margin-bottom: 15px;
-        border-bottom: 2px solid #0000CD;
-        padding-bottom: 10px;
-    }
-
-    .metric-item {
-        background: rgba(0, 0, 205, 0.1);
-        padding: 10px;
-        margin: 8px 0;
-        border-radius: 8px;
-        border-left: 3px solid #0000CD;
-    }
-
-    .metric-label {
-        color: #4ECDC4;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
-    .metric-value {
-        color: white;
-        font-size: 16px;
-        font-weight: bold;
-    }
-
-    .close-overlay {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background: #0000CD;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 25px;
-        height: 25px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-
-    .close-overlay:hover {
-        background: #000080;
     }
 
     /* Animated Button Styles from Galaxy */
@@ -518,44 +457,67 @@ def show_loading_animation(message: str, duration: int = 5):
 
 # Floating Metrics Overlay
 def render_metrics_overlay():
-    """Render floating metrics overlay with auto-run ML results"""
-    if st.session_state.show_metrics_overlay and st.session_state.auto_ml_metrics:
-        metrics = st.session_state.auto_ml_metrics
+    """Render floating metrics overlay with auto-run ML results using Streamlit components"""
+    if st.session_state.auto_ml_metrics:
+        # Create a container in the sidebar for the floating metrics
+        with st.sidebar:
+            st.markdown("---")
 
-        overlay_html = """
-        <div class="metrics-overlay">
-            <button class="close-overlay" onclick="this.parentElement.style.display='none'">×</button>
-            <div class="metrics-overlay-header">
-                🤖 Auto-ML Metrics
-            </div>
-        """
+            # Header with toggle button
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown("### 🤖 Auto-ML Metrics")
+            with col2:
+                if st.button("✕" if st.session_state.show_metrics_overlay else "📊",
+                             key="toggle_metrics",
+                             help="Close" if st.session_state.show_metrics_overlay else "Show Metrics"):
+                    st.session_state.show_metrics_overlay = not st.session_state.show_metrics_overlay
+                    st.rerun()
 
-        # Regression metrics
-        if metrics.get('regression_metrics'):
-            overlay_html += "<div style='margin-bottom: 15px;'><strong style='color: #4ECDC4;'>📈 Regression Models</strong></div>"
-            for model_name, model_metrics in metrics['regression_metrics'].items():
-                if 'error' not in model_metrics:
-                    overlay_html += f"""
-                    <div class="metric-item">
-                        <div class="metric-label">{model_name}</div>
-                        <div class="metric-value">R² Score: {model_metrics.get('R2', 0):.4f}</div>
-                        <div style="font-size: 11px; color: #aaa;">RMSE: {model_metrics.get('RMSE', 0):.4f}</div>
-                    </div>
-                    """
+            # Show metrics if overlay is open
+            if st.session_state.show_metrics_overlay:
+                metrics = st.session_state.auto_ml_metrics
 
-        # Best model
-        if metrics.get('best_model'):
-            overlay_html += f"""
-            <div style="margin-top: 15px; padding: 10px; background: rgba(0, 205, 0, 0.1); border-radius: 8px; border-left: 3px solid #00CD00;">
-                <div style="color: #00CD00; font-size: 12px; font-weight: bold;">🏆 Best Model</div>
-                <div style="color: white; font-size: 14px;">{metrics['best_model']}</div>
-                <div style="color: #aaa; font-size: 11px;">Score: {metrics['best_score']:.4f}</div>
-            </div>
-            """
+                # Display regression metrics
+                if metrics.get('regression_metrics'):
+                    st.markdown("#### 📈 Regression Models")
 
-        overlay_html += "</div>"
+                    for model_name, model_metrics in metrics['regression_metrics'].items():
+                        if 'error' not in model_metrics:
+                            with st.container():
+                                st.markdown(f"**{model_name}**")
+                                col1, col2, col3 = st.columns(3)
 
-        st.markdown(overlay_html, unsafe_allow_html=True)
+                                with col1:
+                                    st.metric(
+                                        label="R² Score",
+                                        value=f"{model_metrics.get('R2', 0):.4f}"
+                                    )
+
+                                with col2:
+                                    st.metric(
+                                        label="RMSE",
+                                        value=f"{model_metrics.get('RMSE', 0):.4f}"
+                                    )
+
+                                with col3:
+                                    st.metric(
+                                        label="MAE",
+                                        value=f"{model_metrics.get('MAE', 0):.4f}"
+                                    )
+
+                                st.markdown("---")
+
+                # Display best model
+                if metrics.get('best_model'):
+                    st.success(f"🏆 **Best Model:** {metrics['best_model']}")
+                    st.metric(
+                        label="Best Score (R²)",
+                        value=f"{metrics['best_score']:.4f}",
+                        delta=None
+                    )
+
+            st.markdown("---")
 
 
 # Header section
