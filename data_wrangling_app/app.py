@@ -10,6 +10,7 @@ from utils.visualizations import VisualizationEngine
 from utils.email_service import EmailService
 from utils.database import DatabaseManager
 from utils.data_processor import DataProcessor
+from utils.ml_integration import MLIntegration
 from config import *
 from sklearn import linear_model
 from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, Lasso
@@ -93,7 +94,316 @@ def load_custom_css():
     .metric-card:hover {
         transform: translateY(-5px);
     }
-    
+
+    /* Floating Metrics Overlay */
+    .metrics-overlay {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        border: 2px solid #0000CD;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 205, 0.3);
+        z-index: 9999;
+        max-width: 350px;
+        animation: slideIn 0.5s ease-out;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    .metrics-overlay-header {
+        color: #0000CD;
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        border-bottom: 2px solid #0000CD;
+        padding-bottom: 10px;
+    }
+
+    .metric-item {
+        background: rgba(0, 0, 205, 0.1);
+        padding: 10px;
+        margin: 8px 0;
+        border-radius: 8px;
+        border-left: 3px solid #0000CD;
+    }
+
+    .metric-label {
+        color: #4ECDC4;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .metric-value {
+        color: white;
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .close-overlay {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #0000CD;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 25px;
+        height: 25px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+
+    .close-overlay:hover {
+        background: #000080;
+    }
+
+    /* Animated Button Styles from Galaxy */
+    .galaxy-button {
+        position: relative;
+        padding: 12px 35px;
+        background: linear-gradient(135deg, #0000CD, #000080);
+        font-size: 17px;
+        font-weight: 600;
+        color: #fff;
+        border: 2px solid #0000CD;
+        border-radius: 50px;
+        cursor: pointer;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 205, 0.3);
+    }
+
+    .galaxy-button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(0, 0, 205, 0.5);
+        border-color: #4ECDC4;
+    }
+
+    .galaxy-button:active {
+        transform: translateY(-1px);
+    }
+
+    .galaxy-button::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(78, 205, 196, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+    }
+
+    .galaxy-button:hover::before {
+        width: 300px;
+        height: 300px;
+    }
+
+    /* Notification Animation */
+    @keyframes slideInRight {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.05);
+        }
+    }
+
+    .notification-success {
+        animation: slideInRight 0.5s ease-out, pulse 2s infinite;
+    }
+
+    /* Loading Spinner */
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    @keyframes blockLoading {
+        0%, 100% {
+            opacity: 0.3;
+        }
+        50% {
+            opacity: 1;
+        }
+    }
+
+    .galaxy-loader {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(0, 0, 205, 0.1);
+        border-top: 4px solid #0000CD;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    /* Enhanced Card Hover Effects */
+    .enhanced-card {
+        position: relative;
+        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        border: 1px solid rgba(0, 0, 205, 0.3);
+        border-radius: 15px;
+        padding: 20px;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+    .enhanced-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(78, 205, 196, 0.1), transparent);
+        transition: left 0.5s;
+    }
+
+    .enhanced-card:hover::before {
+        left: 100%;
+    }
+
+    .enhanced-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 205, 0.4);
+        border-color: #4ECDC4;
+    }
+
+    /* Icon Pulse Animation */
+    @keyframes iconPulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.2);
+        }
+    }
+
+    .icon-animated {
+        display: inline-block;
+        animation: iconPulse 2s ease-in-out infinite;
+    }
+
+    /* Tooltip Styles */
+    .galaxy-tooltip {
+        position: relative;
+        display: inline-block;
+    }
+
+    .galaxy-tooltip .tooltiptext {
+        visibility: hidden;
+        background-color: #0000CD;
+        color: #fff;
+        text-align: center;
+        border-radius: 8px;
+        padding: 8px 12px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.3s, transform 0.3s;
+        white-space: nowrap;
+        font-size: 12px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .galaxy-tooltip .tooltiptext::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: #0000CD transparent transparent transparent;
+    }
+
+    .galaxy-tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(-50%) translateY(-5px);
+    }
+
+    /* Background Pattern */
+    .pattern-bg {
+        background-image:
+            radial-gradient(circle at 20% 50%, rgba(0, 0, 205, 0.05) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(78, 205, 196, 0.05) 0%, transparent 50%);
+        background-size: 100% 100%;
+    }
+
+    /* Notification Styles */
+    .notification-success {
+        background: linear-gradient(135deg, #1a472a, #2d5f3f);
+        border-left: 4px solid #4CAF50;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        color: #fff;
+        font-weight: 500;
+    }
+
+    .notification-error {
+        background: linear-gradient(135deg, #4a1a1a, #5f2d2d);
+        border-left: 4px solid #f44336;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+        color: #fff;
+        font-weight: 500;
+    }
+
+    .notification-warning {
+        background: linear-gradient(135deg, #4a3a1a, #5f4d2d);
+        border-left: 4px solid #ff9800;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+        color: #fff;
+        font-weight: 500;
+    }
+
+    .notification-info {
+        background: linear-gradient(135deg, #1a2a4a, #2d3f5f);
+        border-left: 4px solid #2196F3;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        color: #fff;
+        font-weight: 500;
+    }
+
     /* Loading animation */
     .loading-spinner {
         border: 4px solid #000080;
@@ -162,6 +472,8 @@ def init_session_state():
         st.session_state.email_service = EmailService()
     if "viz_engine" not in st.session_state:
         st.session_state.viz_engine = VisualizationEngine()
+    if "ml_integration" not in st.session_state:
+        st.session_state.ml_integration = MLIntegration()
     if "current_data" not in st.session_state:
         st.session_state.current_data = None
     if "processing_complete" not in st.session_state:
@@ -179,6 +491,12 @@ def init_session_state():
         st.session_state.trained_models = {}
     if "model_metrics" not in st.session_state:
         st.session_state.model_metrics = {}
+    if "auto_ml_metrics" not in st.session_state:
+        st.session_state.auto_ml_metrics = None
+    if "show_metrics_overlay" not in st.session_state:
+        st.session_state.show_metrics_overlay = False
+    if "xgboost_predictions_df" not in st.session_state:
+        st.session_state.xgboost_predictions_df = None
 
 
 # Loading animation
@@ -196,6 +514,48 @@ def show_loading_animation(message: str, duration: int = 5):
 
     progress_bar.empty()
     status_text.empty()
+
+
+# Floating Metrics Overlay
+def render_metrics_overlay():
+    """Render floating metrics overlay with auto-run ML results"""
+    if st.session_state.show_metrics_overlay and st.session_state.auto_ml_metrics:
+        metrics = st.session_state.auto_ml_metrics
+
+        overlay_html = """
+        <div class="metrics-overlay">
+            <button class="close-overlay" onclick="this.parentElement.style.display='none'">×</button>
+            <div class="metrics-overlay-header">
+                🤖 Auto-ML Metrics
+            </div>
+        """
+
+        # Regression metrics
+        if metrics.get('regression_metrics'):
+            overlay_html += "<div style='margin-bottom: 15px;'><strong style='color: #4ECDC4;'>📈 Regression Models</strong></div>"
+            for model_name, model_metrics in metrics['regression_metrics'].items():
+                if 'error' not in model_metrics:
+                    overlay_html += f"""
+                    <div class="metric-item">
+                        <div class="metric-label">{model_name}</div>
+                        <div class="metric-value">R² Score: {model_metrics.get('R2', 0):.4f}</div>
+                        <div style="font-size: 11px; color: #aaa;">RMSE: {model_metrics.get('RMSE', 0):.4f}</div>
+                    </div>
+                    """
+
+        # Best model
+        if metrics.get('best_model'):
+            overlay_html += f"""
+            <div style="margin-top: 15px; padding: 10px; background: rgba(0, 205, 0, 0.1); border-radius: 8px; border-left: 3px solid #00CD00;">
+                <div style="color: #00CD00; font-size: 12px; font-weight: bold;">🏆 Best Model</div>
+                <div style="color: white; font-size: 14px;">{metrics['best_model']}</div>
+                <div style="color: #aaa; font-size: 11px;">Score: {metrics['best_score']:.4f}</div>
+            </div>
+            """
+
+        overlay_html += "</div>"
+
+        st.markdown(overlay_html, unsafe_allow_html=True)
 
 
 # Header section
@@ -747,6 +1107,7 @@ def render_sidebar():
   <div class="Name">
     <p>Thapelo Kgothatso Thooe</p>
     <p>Python Web Developer</p>
+    <p style="font-size: 12px; margin-top: 10px;">💳 <a href="https://paypal.me/dunduonline" target="_blank" style="color: #00457C; text-decoration: none;">paypal@dunduonline</a></p>
   </div>
   <div class="socialbar">
     <a id="github" href="https://github.com/profitprojectsonline" target="_blank"><svg viewBox="0 0 16 16" class="bi bi-github" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
@@ -852,7 +1213,16 @@ def render_sidebar():
 
 def render_home():
 
-    st.markdown("##   DWAP  | Data Processing Platform")
+    st.markdown("""
+        <div style="text-align: center; padding: 20px;" class="pattern-bg">
+            <h1 style="font-size: 3em; background: linear-gradient(135deg, #0000CD, #4ECDC4);
+                       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+                       background-clip: text; margin-bottom: 10px;">
+                <span class="icon-animated">📊</span> DWAP
+            </h1>
+            <p style="font-size: 1.2em; color: #4ECDC4; margin-top: -10px;">Data Wrangling & Analytics Platform</p>
+        </div>
+    """, unsafe_allow_html=True)
     st.divider()
 
     col1, col2, col3 = st.columns(3)
@@ -860,8 +1230,8 @@ def render_home():
     with col1:
         st.markdown(
             """
-        <div class="metric-card">
-            <h3> Upload</h3>
+        <div class="enhanced-card">
+            <h3><span class="icon-animated">📤</span> Upload</h3>
             <p>Support for multiple file formats including CSV, Excel, JSON, PDF, and DOCX</p>
         </div>
         <div class="item-hints">
@@ -994,8 +1364,8 @@ def render_home():
     with col2:
         st.markdown(
             """
-        <div class="metric-card">
-            <h3> Process</h3>
+        <div class="enhanced-card">
+            <h3><span class="icon-animated">⚙️</span> Process</h3>
             <p>Advanced data cleaning, transformation, and quality improvement tools</p>
         </div>
         <div class="item-hints">
@@ -1128,8 +1498,8 @@ def render_home():
     with col3:
         st.markdown(
             """
-        <div class="metric-card">
-            <h3> Visualize</h3>
+        <div class="enhanced-card">
+            <h3><span class="icon-animated">📈</span> Visualize</h3>
             <p>Interactive dashboards and comprehensive data analysis</p>
         </div>
         <div class="item-hints">
@@ -1279,19 +1649,38 @@ def render_home():
     st.divider()
 
     # Features overview
-    st.markdown("##  Key Features")
+    st.markdown("""
+        <h2 style="text-align: center; color: #4ECDC4;">
+            <span class="icon-animated">✨</span> Key Features
+        </h2>
+    """, unsafe_allow_html=True)
 
     features = [
-        "🔄 **Automated Data Cleaning** - Remove duplicates, handle missing values, standardize formats",
-        "📊 **Interactive Visualizations** - Dynamic charts, graphs, and statistical analysis",
-        "🗄️ **Searchable Database** - Organize and retrieve your processed datasets",
-        "📧 **Email Integration** - Share results directly via email",
-        "⚡ **Real-time Processing** - Fast data transformation with progress tracking",
-        "🎨 **Modern Interface** - Intuitive design with smooth animations",
+        ("<span class='icon-animated'>🔄</span>", "**Automated Data Cleaning**",
+         "Remove duplicates, handle missing values, standardize formats"),
+        ("<span class='icon-animated'>📊</span>", "**Interactive Visualizations**",
+         "Dynamic charts, graphs, and statistical analysis"),
+        ("<span class='icon-animated'>🗄️</span>", "**Searchable Database**",
+         "Organize and retrieve your processed datasets"),
+        ("<span class='icon-animated'>📧</span>",
+         "**Email Integration**", "Share results directly via email"),
+        ("<span class='icon-animated'>⚡</span>", "**Real-time Processing**",
+         "Fast data transformation with progress tracking"),
+        ("<span class='icon-animated'>🎨</span>", "**Modern Interface**",
+         "Intuitive design with smooth animations"),
+        ("<span class='icon-animated'>🤖</span>", "**Machine Learning**",
+         "Auto-run ML models with XGBoost and linear regression"),
+        ("<span class='icon-animated'>🚀</span>", "**Feature Engineering**",
+         "Advanced feature scaling, encoding, and selection"),
     ]
 
-    for feature in features:
-        st.markdown(feature)
+    for icon, title, desc in features:
+        st.markdown(f"""
+            <div class="enhanced-card" style="margin: 10px 0; padding: 15px;">
+                <h4>{icon} {title}</h4>
+                <p style="color: #aaa; margin: 5px 0 0 0;">{desc}</p>
+            </div>
+        """, unsafe_allow_html=True)
 
     # Getting started
     st.divider()
@@ -1616,7 +2005,11 @@ def render_upload():
                     st.session_state.current_data = df
                     st.session_state.file_info = file_details
 
-                    st.success("✅ Data loaded successfully!")
+                    st.markdown("""
+                        <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
+                            <span class="icon-animated">✅</span> Data loaded successfully!
+                        </div>
+                    """, unsafe_allow_html=True)
 
                     # Preview data
                     st.divider()
@@ -1700,7 +2093,29 @@ def render_process():
             st.session_state.current_data = processed_df
             st.session_state.processing_complete = True
 
-            st.success("✅ Data processing complete!")
+            st.markdown("""
+                <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
+                    <span class="icon-animated">✅</span> Data processing complete!
+                </div>
+            """, unsafe_allow_html=True)
+
+            # Auto-run ML models
+            st.markdown("""
+                <div class="notification-info" style="animation: slideInRight 0.6s ease-out;">
+                    <span class="icon-animated">🤖</span> Running automatic ML model evaluation...
+                </div>
+            """, unsafe_allow_html=True)
+            try:
+                auto_ml_results = st.session_state.ml_integration.auto_run_models(
+                    processed_df)
+                st.session_state.auto_ml_metrics = auto_ml_results
+                st.session_state.show_metrics_overlay = True
+
+                if auto_ml_results.get('best_model'):
+                    st.success(
+                        f"✅ Auto-ML complete! Best model: {auto_ml_results['best_model']} (R² Score: {auto_ml_results['best_score']:.4f})")
+            except Exception as e:
+                st.warning(f"Auto-ML evaluation skipped: {str(e)}")
 
             # Show processing log
             st.divider()
@@ -1902,9 +2317,17 @@ def render_database():
             )
 
             if dataset_id:
-                st.success(f"✅ Dataset saved with ID: {dataset_id}")
+                st.markdown(f"""
+                    <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
+                        <span class="icon-animated">✅</span> Dataset saved with ID: {dataset_id}
+                    </div>
+                """, unsafe_allow_html=True)
             else:
-                st.error("❌ Failed to save dataset")
+                st.markdown("""
+                    <div class="notification-error" style="animation: slideInRight 0.5s ease-out;">
+                        <span class="icon-animated">❌</span> Failed to save dataset
+                    </div>
+                """, unsafe_allow_html=True)
 
     # Search and browse datasets
 
@@ -2040,10 +2463,17 @@ def render_share_results():
                 )
 
                 if success:
-                    st.success(
-                        f"✅ Email sent successfully to {recipient_email}!")
+                    st.markdown(f"""
+                        <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
+                            <span class="icon-animated">✅</span> Email sent successfully to {recipient_email}!
+                        </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    st.error("❌ Failed to send email")
+                    st.markdown("""
+                        <div class="notification-error" style="animation: slideInRight 0.5s ease-out;">
+                            <span class="icon-animated">❌</span> Failed to send email
+                        </div>
+                    """, unsafe_allow_html=True)
 
     # Download section
     st.divider()
@@ -2133,9 +2563,11 @@ def render_feature_engineering():
         else:
             scaling_method = st.selectbox(
                 "Select Scaling Method",
-                ["Standard Scaler (Z-score)", "Min-Max Scaler", "Robust Scaler"]
+                ["Standard Scaler (Z-score)",
+                 "Min-Max Scaler", "Robust Scaler"]
             )
-            cols_to_scale = st.multiselect("Select columns to scale", numeric_cols, default=numeric_cols[:3] if len(numeric_cols) >= 3 else numeric_cols)
+            cols_to_scale = st.multiselect("Select columns to scale", numeric_cols, default=numeric_cols[:3] if len(
+                numeric_cols) >= 3 else numeric_cols)
 
             if st.button("Apply Scaling", key="apply_scaling"):
                 if cols_to_scale:
@@ -2151,7 +2583,8 @@ def render_feature_engineering():
                         df[f"{col}_scaled"] = scaled_data[:, i]
 
                     st.session_state.feature_engineered_data = df
-                    st.success(f"✅ Applied {scaling_method} to {len(cols_to_scale)} columns!")
+                    st.success(
+                        f"✅ Applied {scaling_method} to {len(cols_to_scale)} columns!")
 
                     # Show before/after comparison
                     col1, col2 = st.columns(2)
@@ -2160,25 +2593,30 @@ def render_feature_engineering():
                         st.dataframe(df[cols_to_scale].head())
                     with col2:
                         st.markdown("**Scaled Data**")
-                        st.dataframe(df[[f"{c}_scaled" for c in cols_to_scale]].head())
+                        st.dataframe(
+                            df[[f"{c}_scaled" for c in cols_to_scale]].head())
 
     with tab2:
         st.markdown("#### Polynomial Features")
         if not numeric_cols:
             st.warning("No numeric columns available for polynomial features")
         else:
-            poly_cols = st.multiselect("Select columns for polynomial features", numeric_cols, default=numeric_cols[:2] if len(numeric_cols) >= 2 else numeric_cols)
+            poly_cols = st.multiselect("Select columns for polynomial features", numeric_cols,
+                                       default=numeric_cols[:2] if len(numeric_cols) >= 2 else numeric_cols)
             degree = st.slider("Polynomial Degree", 2, 5, 2)
-            include_interaction = st.checkbox("Include interaction features only", value=False)
+            include_interaction = st.checkbox(
+                "Include interaction features only", value=False)
 
             if st.button("Generate Polynomial Features", key="gen_poly"):
                 if poly_cols:
-                    poly = PolynomialFeatures(degree=degree, include_bias=False, interaction_only=include_interaction)
+                    poly = PolynomialFeatures(
+                        degree=degree, include_bias=False, interaction_only=include_interaction)
                     poly_data = poly.fit_transform(df[poly_cols])
                     feature_names = poly.get_feature_names_out(poly_cols)
 
                     poly_df = pd.DataFrame(poly_data, columns=feature_names)
-                    st.success(f"✅ Generated {len(feature_names)} polynomial features!")
+                    st.success(
+                        f"✅ Generated {len(feature_names)} polynomial features!")
                     st.dataframe(poly_df.head())
 
                     # Merge with original data
@@ -2196,20 +2634,24 @@ def render_feature_engineering():
                 "Select Encoding Method",
                 ["Label Encoding", "One-Hot Encoding", "Ordinal Encoding"]
             )
-            cols_to_encode = st.multiselect("Select columns to encode", categorical_cols)
+            cols_to_encode = st.multiselect(
+                "Select columns to encode", categorical_cols)
 
             if st.button("Apply Encoding", key="apply_encoding"):
                 if cols_to_encode:
                     if encoding_method == "Label Encoding":
                         le = LabelEncoder()
                         for col in cols_to_encode:
-                            df[f"{col}_encoded"] = le.fit_transform(df[col].astype(str))
+                            df[f"{col}_encoded"] = le.fit_transform(
+                                df[col].astype(str))
                     elif encoding_method == "One-Hot Encoding":
-                        encoded_df = pd.get_dummies(df[cols_to_encode], prefix=cols_to_encode)
+                        encoded_df = pd.get_dummies(
+                            df[cols_to_encode], prefix=cols_to_encode)
                         df = pd.concat([df, encoded_df], axis=1)
 
                     st.session_state.feature_engineered_data = df
-                    st.success(f"✅ Applied {encoding_method} to {len(cols_to_encode)} columns!")
+                    st.success(
+                        f"✅ Applied {encoding_method} to {len(cols_to_encode)} columns!")
                     st.dataframe(df.head())
 
     with tab4:
@@ -2219,7 +2661,8 @@ def render_feature_engineering():
         else:
             target_col = st.selectbox("Select Target Column", numeric_cols)
             feature_cols = [c for c in numeric_cols if c != target_col]
-            k_features = st.slider("Number of features to select", 1, len(feature_cols), min(5, len(feature_cols)))
+            k_features = st.slider("Number of features to select", 1, len(
+                feature_cols), min(5, len(feature_cols)))
 
             if st.button("Analyze Feature Importance", key="feat_importance"):
                 X = df[feature_cols].fillna(0)
@@ -2235,7 +2678,8 @@ def render_feature_engineering():
 
                 # Create bar chart
                 fig = go.Figure(data=[
-                    go.Bar(x=scores['Feature'], y=scores['Score'], marker_color='#0000CD')
+                    go.Bar(x=scores['Feature'],
+                           y=scores['Score'], marker_color='#0000CD')
                 ])
                 fig.update_layout(
                     title="Feature Importance Scores",
@@ -2253,8 +2697,10 @@ def render_feature_engineering():
         if not numeric_cols:
             st.warning("No numeric columns available for outlier detection")
         else:
-            outlier_col = st.selectbox("Select column for outlier detection", numeric_cols)
-            method = st.selectbox("Detection Method", ["IQR Method", "Elliptic Envelope", "Z-Score"])
+            outlier_col = st.selectbox(
+                "Select column for outlier detection", numeric_cols)
+            method = st.selectbox("Detection Method", [
+                                  "IQR Method", "Elliptic Envelope", "Z-Score"])
 
             if st.button("Detect Outliers", key="detect_outliers"):
                 col_data = df[outlier_col].dropna()
@@ -2265,22 +2711,28 @@ def render_feature_engineering():
                     IQR = Q3 - Q1
                     lower_bound = Q1 - 1.5 * IQR
                     upper_bound = Q3 + 1.5 * IQR
-                    outliers = (col_data < lower_bound) | (col_data > upper_bound)
+                    outliers = (col_data < lower_bound) | (
+                        col_data > upper_bound)
                 elif method == "Elliptic Envelope":
-                    detector = EllipticEnvelope(contamination=0.1, random_state=42)
-                    predictions = detector.fit_predict(col_data.values.reshape(-1, 1))
+                    detector = EllipticEnvelope(
+                        contamination=0.1, random_state=42)
+                    predictions = detector.fit_predict(
+                        col_data.values.reshape(-1, 1))
                     outliers = predictions == -1
                 else:  # Z-Score
                     z_scores = (col_data - col_data.mean()) / col_data.std()
                     outliers = np.abs(z_scores) > 3
 
                 n_outliers = outliers.sum()
-                st.info(f"Found {n_outliers} outliers ({n_outliers/len(col_data)*100:.1f}%)")
+                st.info(
+                    f"Found {n_outliers} outliers ({n_outliers/len(col_data)*100:.1f}%)")
 
                 # Visualization
                 fig = go.Figure()
-                fig.add_trace(go.Box(y=col_data, name=outlier_col, marker_color='#0000CD'))
-                fig.update_layout(title=f"Box Plot - {outlier_col}", template="plotly_dark")
+                fig.add_trace(
+                    go.Box(y=col_data, name=outlier_col, marker_color='#0000CD'))
+                fig.update_layout(
+                    title=f"Box Plot - {outlier_col}", template="plotly_dark")
                 st.plotly_chart(fig, use_container_width=True)
 
     # Save engineered features
@@ -2309,17 +2761,21 @@ def render_machine_learning():
         return
 
     # ML Model tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📈 Regression",
         "🎯 Classification",
         "🔮 Clustering",
-        "🧠 Neural Networks"
+        "🧠 Neural Networks",
+        "🚀 XGBoost",
+        "📊 Linear Models"
     ])
 
     with tab1:
         st.markdown("### 📈 Regression Models")
-        target_col = st.selectbox("Select Target Variable", numeric_cols, key="reg_target")
-        feature_cols = st.multiselect("Select Feature Variables", [c for c in numeric_cols if c != target_col], key="reg_features")
+        target_col = st.selectbox(
+            "Select Target Variable", numeric_cols, key="reg_target")
+        feature_cols = st.multiselect("Select Feature Variables", [
+                                      c for c in numeric_cols if c != target_col], key="reg_features")
 
         model_type = st.selectbox("Select Model", [
             "Linear Regression",
@@ -2332,13 +2788,15 @@ def render_machine_learning():
             "MLP Regressor"
         ])
 
-        test_size = st.slider("Test Size (%)", 10, 40, 20, key="reg_test") / 100
+        test_size = st.slider("Test Size (%)", 10, 40,
+                              20, key="reg_test") / 100
 
         if st.button("Train Regression Model", key="train_reg"):
             if feature_cols:
                 X = df[feature_cols].fillna(0)
                 y = df[target_col].fillna(0)
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=42)
 
                 # Select and train model
                 if model_type == "Linear Regression":
@@ -2348,15 +2806,18 @@ def render_machine_learning():
                 elif model_type == "Lasso Regression":
                     model = Lasso(alpha=1.0)
                 elif model_type == "Random Forest Regressor":
-                    model = RandomForestRegressor(n_estimators=100, random_state=42)
+                    model = RandomForestRegressor(
+                        n_estimators=100, random_state=42)
                 elif model_type == "Gradient Boosting Regressor":
-                    model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+                    model = GradientBoostingRegressor(
+                        n_estimators=100, random_state=42)
                 elif model_type == "K-Neighbors Regressor":
                     model = KNeighborsRegressor(n_neighbors=5)
                 elif model_type == "Decision Tree Regressor":
                     model = DecisionTreeRegressor(random_state=42)
                 else:
-                    model = MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
+                    model = MLPRegressor(hidden_layer_sizes=(
+                        100, 50), max_iter=500, random_state=42)
 
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
@@ -2366,7 +2827,8 @@ def render_machine_learning():
                 r2 = r2_score(y_test, y_pred)
 
                 st.session_state.trained_models['regression'] = model
-                st.session_state.model_metrics['regression'] = {'MSE': mse, 'R2': r2}
+                st.session_state.model_metrics['regression'] = {
+                    'MSE': mse, 'R2': r2}
 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -2376,24 +2838,32 @@ def render_machine_learning():
 
                 # Visualization
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', name='Predictions', marker=dict(color='#0000CD')))
-                fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()], mode='lines', name='Perfect Fit', line=dict(color='red', dash='dash')))
-                fig.update_layout(title="Actual vs Predicted", xaxis_title="Actual", yaxis_title="Predicted", template="plotly_dark")
+                fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers',
+                              name='Predictions', marker=dict(color='#0000CD')))
+                fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max(
+                )], mode='lines', name='Perfect Fit', line=dict(color='red', dash='dash')))
+                fig.update_layout(title="Actual vs Predicted", xaxis_title="Actual",
+                                  yaxis_title="Predicted", template="plotly_dark")
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Feature importance for tree-based models
                 if hasattr(model, 'feature_importances_'):
-                    importance_df = pd.DataFrame({'Feature': feature_cols, 'Importance': model.feature_importances_}).sort_values('Importance', ascending=False)
-                    fig_imp = go.Figure(data=[go.Bar(x=importance_df['Feature'], y=importance_df['Importance'], marker_color='#0000CD')])
-                    fig_imp.update_layout(title="Feature Importance", template="plotly_dark")
+                    importance_df = pd.DataFrame({'Feature': feature_cols, 'Importance': model.feature_importances_}).sort_values(
+                        'Importance', ascending=False)
+                    fig_imp = go.Figure(data=[go.Bar(
+                        x=importance_df['Feature'], y=importance_df['Importance'], marker_color='#0000CD')])
+                    fig_imp.update_layout(
+                        title="Feature Importance", template="plotly_dark")
                     st.plotly_chart(fig_imp, use_container_width=True)
 
     with tab2:
         st.markdown("### 🎯 Classification Models")
         st.info("For classification, ensure your target variable has discrete classes")
 
-        target_col_cls = st.selectbox("Select Target Variable", df.columns.tolist(), key="cls_target")
-        feature_cols_cls = st.multiselect("Select Feature Variables", numeric_cols, key="cls_features")
+        target_col_cls = st.selectbox(
+            "Select Target Variable", df.columns.tolist(), key="cls_target")
+        feature_cols_cls = st.multiselect(
+            "Select Feature Variables", numeric_cols, key="cls_features")
 
         cls_model_type = st.selectbox("Select Model", [
             "Logistic Regression",
@@ -2409,15 +2879,19 @@ def render_machine_learning():
         if st.button("Train Classification Model", key="train_cls"):
             if feature_cols_cls:
                 X = df[feature_cols_cls].fillna(0)
-                y = LabelEncoder().fit_transform(df[target_col_cls].fillna('Unknown'))
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                y = LabelEncoder().fit_transform(
+                    df[target_col_cls].fillna('Unknown'))
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=0.2, random_state=42)
 
                 if cls_model_type == "Logistic Regression":
                     model = LogisticRegression(max_iter=1000)
                 elif cls_model_type == "Random Forest Classifier":
-                    model = RandomForestClassifier(n_estimators=100, random_state=42)
+                    model = RandomForestClassifier(
+                        n_estimators=100, random_state=42)
                 elif cls_model_type == "Gradient Boosting Classifier":
-                    model = GradientBoostingClassifier(n_estimators=100, random_state=42)
+                    model = GradientBoostingClassifier(
+                        n_estimators=100, random_state=42)
                 elif cls_model_type == "K-Neighbors Classifier":
                     model = KNeighborsClassifier(n_neighbors=5)
                 elif cls_model_type == "Decision Tree Classifier":
@@ -2427,7 +2901,8 @@ def render_machine_learning():
                 elif cls_model_type == "SVM Classifier":
                     model = SVC(kernel='rbf', random_state=42)
                 else:
-                    model = MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
+                    model = MLPClassifier(hidden_layer_sizes=(
+                        100, 50), max_iter=500, random_state=42)
 
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
@@ -2438,14 +2913,18 @@ def render_machine_learning():
 
                 # Confusion Matrix
                 cm = confusion_matrix(y_test, y_pred)
-                fig_cm = go.Figure(data=go.Heatmap(z=cm, colorscale='Blues', text=cm, texttemplate='%{text}'))
-                fig_cm.update_layout(title="Confusion Matrix", xaxis_title="Predicted", yaxis_title="Actual", template="plotly_dark")
+                fig_cm = go.Figure(data=go.Heatmap(
+                    z=cm, colorscale='Blues', text=cm, texttemplate='%{text}'))
+                fig_cm.update_layout(title="Confusion Matrix", xaxis_title="Predicted",
+                                     yaxis_title="Actual", template="plotly_dark")
                 st.plotly_chart(fig_cm, use_container_width=True)
 
     with tab3:
         st.markdown("### 🔮 Clustering Models")
-        cluster_cols = st.multiselect("Select Features for Clustering", numeric_cols, key="cluster_features")
-        cluster_method = st.selectbox("Select Algorithm", ["K-Means", "DBSCAN", "Hierarchical"])
+        cluster_cols = st.multiselect(
+            "Select Features for Clustering", numeric_cols, key="cluster_features")
+        cluster_method = st.selectbox(
+            "Select Algorithm", ["K-Means", "DBSCAN", "Hierarchical"])
 
         if cluster_method == "K-Means":
             n_clusters = st.slider("Number of Clusters", 2, 10, 3)
@@ -2457,7 +2936,8 @@ def render_machine_learning():
                 X_scaled = scaler.fit_transform(X)
 
                 if cluster_method == "K-Means":
-                    model = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                    model = KMeans(n_clusters=n_clusters,
+                                   random_state=42, n_init=10)
                 elif cluster_method == "DBSCAN":
                     model = DBSCAN(eps=0.5, min_samples=5)
                 else:
@@ -2477,45 +2957,57 @@ def render_machine_learning():
                 fig = go.Figure()
                 for cluster in set(clusters):
                     mask = clusters == cluster
-                    fig.add_trace(go.Scatter(x=X_pca[mask, 0], y=X_pca[mask, 1], mode='markers', name=f'Cluster {cluster}'))
-                fig.update_layout(title="Cluster Visualization (PCA)", xaxis_title="PC1", yaxis_title="PC2", template="plotly_dark")
+                    fig.add_trace(go.Scatter(
+                        x=X_pca[mask, 0], y=X_pca[mask, 1], mode='markers', name=f'Cluster {cluster}'))
+                fig.update_layout(title="Cluster Visualization (PCA)",
+                                  xaxis_title="PC1", yaxis_title="PC2", template="plotly_dark")
                 st.plotly_chart(fig, use_container_width=True)
 
                 st.markdown("**Cluster Distribution:**")
-                cluster_counts = pd.Series(clusters).value_counts().sort_index()
+                cluster_counts = pd.Series(
+                    clusters).value_counts().sort_index()
                 st.bar_chart(cluster_counts)
 
     with tab4:
         st.markdown("### 🧠 Neural Network")
         st.info("Configure a Multi-Layer Perceptron neural network")
 
-        nn_target = st.selectbox("Select Target", numeric_cols, key="nn_target")
-        nn_features = st.multiselect("Select Features", [c for c in numeric_cols if c != nn_target], key="nn_features")
+        nn_target = st.selectbox(
+            "Select Target", numeric_cols, key="nn_target")
+        nn_features = st.multiselect("Select Features", [
+                                     c for c in numeric_cols if c != nn_target], key="nn_features")
 
         col1, col2 = st.columns(2)
         with col1:
-            hidden_layers = st.text_input("Hidden Layer Sizes (comma-separated)", "100,50")
+            hidden_layers = st.text_input(
+                "Hidden Layer Sizes (comma-separated)", "100,50")
             max_iterations = st.slider("Max Iterations", 100, 1000, 500)
         with col2:
-            learning_rate = st.select_slider("Learning Rate", options=[0.0001, 0.001, 0.01, 0.1], value=0.001)
-            activation = st.selectbox("Activation Function", ["relu", "tanh", "logistic"])
+            learning_rate = st.select_slider("Learning Rate", options=[
+                                             0.0001, 0.001, 0.01, 0.1], value=0.001)
+            activation = st.selectbox("Activation Function", [
+                                      "relu", "tanh", "logistic"])
 
-        task_type = st.radio("Task Type", ["Regression", "Classification"], horizontal=True)
+        task_type = st.radio(
+            "Task Type", ["Regression", "Classification"], horizontal=True)
 
         if st.button("Train Neural Network", key="train_nn"):
             if nn_features:
                 X = df[nn_features].fillna(0)
                 y = df[nn_target].fillna(0)
 
-                hidden = tuple(int(x.strip()) for x in hidden_layers.split(','))
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                hidden = tuple(int(x.strip())
+                               for x in hidden_layers.split(','))
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=0.2, random_state=42)
 
                 scaler = StandardScaler()
                 X_train_scaled = scaler.fit_transform(X_train)
                 X_test_scaled = scaler.transform(X_test)
 
                 if task_type == "Regression":
-                    model = MLPRegressor(hidden_layer_sizes=hidden, max_iter=max_iterations, learning_rate_init=learning_rate, activation=activation, random_state=42)
+                    model = MLPRegressor(hidden_layer_sizes=hidden, max_iter=max_iterations,
+                                         learning_rate_init=learning_rate, activation=activation, random_state=42)
                     model.fit(X_train_scaled, y_train)
                     y_pred = model.predict(X_test_scaled)
                     mse = mean_squared_error(y_test, y_pred)
@@ -2526,7 +3018,8 @@ def render_machine_learning():
                     y_encoded = LabelEncoder().fit_transform(y)
                     y_train_enc = LabelEncoder().fit_transform(y_train)
                     y_test_enc = LabelEncoder().fit_transform(y_test)
-                    model = MLPClassifier(hidden_layer_sizes=hidden, max_iter=max_iterations, learning_rate_init=learning_rate, activation=activation, random_state=42)
+                    model = MLPClassifier(hidden_layer_sizes=hidden, max_iter=max_iterations,
+                                          learning_rate_init=learning_rate, activation=activation, random_state=42)
                     model.fit(X_train_scaled, y_train_enc)
                     y_pred = model.predict(X_test_scaled)
                     acc = accuracy_score(y_test_enc, y_pred)
@@ -2536,9 +3029,184 @@ def render_machine_learning():
 
                 # Loss curve
                 if hasattr(model, 'loss_curve_'):
-                    fig_loss = go.Figure(data=go.Scatter(y=model.loss_curve_, mode='lines', line=dict(color='#0000CD')))
-                    fig_loss.update_layout(title="Training Loss Curve", xaxis_title="Iteration", yaxis_title="Loss", template="plotly_dark")
+                    fig_loss = go.Figure(data=go.Scatter(
+                        y=model.loss_curve_, mode='lines', line=dict(color='#0000CD')))
+                    fig_loss.update_layout(
+                        title="Training Loss Curve", xaxis_title="Iteration", yaxis_title="Loss", template="plotly_dark")
                     st.plotly_chart(fig_loss, use_container_width=True)
+
+    # XGBoost Tab
+    with tab5:
+        st.markdown("### 🚀 XGBoost - Advanced Gradient Boosting")
+        st.info(
+            "XGBoost is a powerful gradient boosting algorithm that excels at structured/tabular data.")
+
+        xgb_target = st.selectbox(
+            "Select Target Variable", numeric_cols, key="xgb_target")
+        xgb_features = st.multiselect("Select Feature Variables",
+                                      [c for c in numeric_cols if c != xgb_target],
+                                      key="xgb_features")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            xgb_task = st.radio(
+                "Task Type", ["Regression", "Classification"], key="xgb_task")
+            max_depth = st.slider("Max Depth", 2, 10, 3, key="xgb_depth")
+        with col2:
+            n_estimators = st.slider(
+                "Number of Estimators", 50, 500, 100, key="xgb_est")
+            learning_rate = st.select_slider("Learning Rate",
+                                             options=[0.01, 0.05,
+                                                      0.1, 0.2, 0.3],
+                                             value=0.1, key="xgb_lr")
+
+        col_train, col_pred = st.columns(2)
+
+        with col_train:
+            if st.button("🎯 Train XGBoost Model", key="train_xgb"):
+                if xgb_features:
+                    with st.spinner("Training XGBoost model..."):
+                        params = {
+                            'max_depth': max_depth,
+                            'learning_rate': learning_rate,
+                            'n_estimators': n_estimators,
+                            'random_state': 42
+                        }
+
+                        result = st.session_state.ml_integration.train_xgboost_model(
+                            df, xgb_target, xgb_features,
+                            task_type=xgb_task.lower(),
+                            params=params
+                        )
+
+                        if 'error' not in result:
+                            st.markdown("""
+                                <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
+                                    <span class="icon-animated">✅</span> XGBoost model trained successfully!
+                                </div>
+                            """, unsafe_allow_html=True)
+
+                            # Display metrics
+                            st.markdown("#### 📊 Model Metrics")
+                            metrics = result['metrics']
+
+                            if xgb_task == "Regression":
+                                col_m1, col_m2, col_m3 = st.columns(3)
+                                with col_m1:
+                                    st.metric(
+                                        "R² Score", f"{metrics['R2']:.4f}")
+                                with col_m2:
+                                    st.metric("RMSE", f"{metrics['RMSE']:.4f}")
+                                with col_m3:
+                                    st.metric("MAE", f"{metrics['MAE']:.4f}")
+                            else:
+                                col_m1, col_m2, col_m3 = st.columns(3)
+                                with col_m1:
+                                    st.metric(
+                                        "Accuracy", f"{metrics['Accuracy']:.4f}")
+                                with col_m2:
+                                    st.metric(
+                                        "Precision", f"{metrics['Precision']:.4f}")
+                                with col_m3:
+                                    st.metric(
+                                        "Recall", f"{metrics['Recall']:.4f}")
+
+                            st.info(
+                                f"💾 Model saved to: {result['model_path']}")
+                        else:
+                            st.error(f"Error: {result['error']}")
+
+        with col_pred:
+            if st.button("🔮 Make Predictions", key="xgb_predict"):
+                if xgb_features:
+                    with st.spinner("Making predictions..."):
+                        predictions_df = st.session_state.ml_integration.make_predictions(
+                            df, xgb_features, model_name='xgboost'
+                        )
+
+                        if predictions_df is not None:
+                            st.session_state.xgboost_predictions_df = predictions_df
+                            st.markdown("""
+                                <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
+                                    <span class="icon-animated">✅</span> Predictions generated!
+                                </div>
+                            """, unsafe_allow_html=True)
+
+                            st.markdown("#### 📊 Predictions vs Original Data")
+                            st.dataframe(predictions_df.head(
+                                20), use_container_width=True)
+
+                            # Download predictions
+                            csv = predictions_df.to_csv(index=False)
+                            st.download_button(
+                                label="📥 Download Predictions CSV",
+                                data=csv,
+                                file_name="xgboost_predictions.csv",
+                                mime="text/csv"
+                            )
+                        else:
+                            st.error(
+                                "No trained model found. Please train a model first.")
+
+    # Linear Models Tab
+    with tab6:
+        st.markdown("### 📊 Statistical Linear Models")
+        st.info("Advanced linear regression models using statsmodels library.")
+
+        lin_target = st.selectbox(
+            "Select Target Variable", numeric_cols, key="lin_target")
+        lin_features = st.multiselect("Select Feature Variables",
+                                      [c for c in numeric_cols if c != lin_target],
+                                      key="lin_features")
+
+        if st.button("📈 Run Linear Models Analysis", key="run_linear"):
+            if lin_features:
+                with st.spinner("Running linear models analysis..."):
+                    results = st.session_state.ml_integration.run_linear_models(
+                        df, lin_target, lin_features
+                    )
+
+                    if 'error' not in results:
+                        # OLS Results
+                        if 'OLS' in results and 'error' not in results['OLS']:
+                            st.markdown(
+                                "#### 📊 Ordinary Least Squares (OLS) Results")
+                            ols = results['OLS']
+
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric(
+                                    "R-Squared", f"{ols['r_squared']:.4f}")
+                            with col2:
+                                st.metric("Adj. R-Squared",
+                                          f"{ols['adj_r_squared']:.4f}")
+                            with col3:
+                                st.metric("F-Statistic",
+                                          f"{ols['f_statistic']:.4f}")
+
+                            st.markdown("**Model Parameters:**")
+                            params_df = pd.DataFrame(list(ols['params'].items()),
+                                                     columns=['Variable', 'Coefficient'])
+                            st.dataframe(params_df, use_container_width=True)
+
+                            with st.expander("📄 View Full Summary"):
+                                st.text(ols['summary'])
+
+                        # WLS Results
+                        if 'WLS' in results and 'error' not in results['WLS']:
+                            st.markdown(
+                                "#### 📊 Weighted Least Squares (WLS) Results")
+                            wls = results['WLS']
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric(
+                                    "R-Squared", f"{wls['r_squared']:.4f}")
+                            with col2:
+                                st.metric("Adj. R-Squared",
+                                          f"{wls['adj_r_squared']:.4f}")
+                    else:
+                        st.error(f"Error: {results['error']}")
 
 
 def main():
@@ -2550,6 +3218,9 @@ def main():
 
     # Render header
     render_header()
+
+    # Render floating metrics overlay
+    render_metrics_overlay()
 
     # Render sidebar and get selected page
     selected_page = render_sidebar()
