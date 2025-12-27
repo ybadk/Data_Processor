@@ -10,11 +10,12 @@ from utils.visualizations import VisualizationEngine
 from utils.email_service import EmailService
 from utils.database import DatabaseManager
 from utils.data_processor import DataProcessor
-from utils.ml_integration import MLIntegration
+from utils.ml_integration import MLIntegration, NeuralNetworkWrapper
+from utils.ml_finance import MLFinanceUtils, render_rnn_component, render_autoencoder_component
 from config import *
 from sklearn import linear_model
 from sklearn.linear_model import LinearRegression, LogisticRegression, Ridge, Lasso
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor, GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.svm import SVC, SVR
@@ -56,9 +57,21 @@ st.set_page_config(**PAGE_CONFIG)
 
 
 def load_custom_css():
+    # Load Bootstrap Icons
+    st.markdown("""
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    """, unsafe_allow_html=True)
+
     st.markdown(
         """
     <style>
+    /* Bootstrap Icons styling */
+    .bi {
+        font-size: inherit;
+        vertical-align: middle;
+        margin-right: 0.3em;
+    }
+
     /* Main theme */
     .stApp {
         background-color: #black;
@@ -398,7 +411,6 @@ def load_custom_css():
         unsafe_allow_html=True,
     )
 
-
 # Initialize session state
 
 
@@ -428,6 +440,8 @@ def init_session_state():
         st.session_state.feature_engineered_data = None
     if "trained_models" not in st.session_state:
         st.session_state.trained_models = {}
+    if "previous_page" not in st.session_state:
+        st.session_state.previous_page = "Home"
     if "model_metrics" not in st.session_state:
         st.session_state.model_metrics = {}
     if "auto_ml_metrics" not in st.session_state:
@@ -436,12 +450,43 @@ def init_session_state():
         st.session_state.show_metrics_overlay = False
     if "xgboost_predictions_df" not in st.session_state:
         st.session_state.xgboost_predictions_df = None
+    if "loader_index" not in st.session_state:
+        st.session_state.loader_index = 0
 
+
+def show_transitional_loader():
+    """Displays one of two 7-second loading animations during page transitions."""
+    loaders = [
+        "galaxy_cards/Loader/Z4drus_orange-rattlesnake-68.html",
+        "galaxy_cards/Loader/Z4drus_polite-seahorse-77.html"
+    ]
+    
+    # Select current loader and toggle index for next time
+    idx = st.session_state.loader_index
+    loader_path = loaders[idx]
+    st.session_state.loader_index = (idx + 1) % len(loaders)
+    
+    try:
+        with open(loader_path, "r", encoding="utf-8") as f:
+            loader_html = f.read().strip()
+        
+        placeholder = st.empty()
+        with placeholder.container():
+            # Centered loader container styling
+            st.markdown(
+                f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>', 
+                unsafe_allow_html=True
+            )
+            time.sleep(7)
+        placeholder.empty()
+    except Exception as e:
+        st.error(f"Error loading animation: {e}")
+        time.sleep(2)
 
 # Loading animation
 
 
-def show_loading_animation(message: str, duration: int = 5):
+def show_loading_animation(message: str, duration: int=5):
     """Show animated loading message"""
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -466,9 +511,10 @@ def render_metrics_overlay():
             # Header with toggle button
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.markdown("### 🤖 Auto-ML Metrics")
+                st.markdown(
+                    "### Auto-ML Metrics", unsafe_allow_html=True)
             with col2:
-                if st.button("✕" if st.session_state.show_metrics_overlay else "📊",
+                if st.button("✕" if st.session_state.show_metrics_overlay else " ",
                              key="toggle_metrics",
                              help="Close" if st.session_state.show_metrics_overlay else "Show Metrics"):
                     st.session_state.show_metrics_overlay = not st.session_state.show_metrics_overlay
@@ -480,7 +526,8 @@ def render_metrics_overlay():
 
                 # Display regression metrics
                 if metrics.get('regression_metrics'):
-                    st.markdown("#### 📈 Regression Models")
+                    st.markdown(
+                        "#### Regression Models", unsafe_allow_html=True)
 
                     for model_name, model_metrics in metrics['regression_metrics'].items():
                         if 'error' not in model_metrics:
@@ -510,7 +557,8 @@ def render_metrics_overlay():
 
                 # Display best model
                 if metrics.get('best_model'):
-                    st.success(f"🏆 **Best Model:** {metrics['best_model']}")
+                    st.success(
+                        f" **Best Model:** {metrics['best_model']}")
                     st.metric(
                         label="Best Score (R²)",
                         value=f"{metrics['best_score']:.4f}",
@@ -518,7 +566,6 @@ def render_metrics_overlay():
                     )
 
             st.markdown("---")
-
 
 # Header section
 
@@ -996,7 +1043,6 @@ def render_header():
         unsafe_allow_html=True,
     )
 
-
 # Sidebar navigation
 
 
@@ -1035,12 +1081,13 @@ def render_sidebar():
 
         # User email input
         st.markdown("---")
-        st.markdown("### 👤 User Information")
+        st.markdown(
+            "### User Information", unsafe_allow_html=True)
         st.write(
             "Enter your email address below, so you can send updated datasets and visualizations to your personal or business email for offline review."
         )
         user_email = st.text_input(
-            "📧 Your Email Address",
+            "Email Address",
             value=st.session_state.user_email,
             placeholder="your.email@example.com",
         )
@@ -1050,14 +1097,12 @@ def render_sidebar():
 
         # Company info
         st.markdown("---")
-        st.markdown("### 🏢 Company Info")
+        st.markdown("### Company Info",
+                    unsafe_allow_html=True)
         st.markdown(
             f"""
-        **{COMPANY_NAME}**  
-        📍 {COMPANY_LOCATION}  
-        📧 {COMPANY_EMAIL}  
-        🏢 Enterprise: {ENTERPRISE_NUMBER}
-        """
+        **{COMPANY_NAME}** {COMPANY_LOCATION} {COMPANY_EMAIL} Enterprise: {ENTERPRISE_NUMBER}
+        """, unsafe_allow_html=True
         )
         st.markdown(
             """
@@ -1069,7 +1114,13 @@ def render_sidebar():
   <div class="Name">
     <p>Thapelo Kgothatso Thooe</p>
     <p>Python Web Developer</p>
-    <p style="font-size: 12px; margin-top: 10px;">💳 <a href="https://paypal.me/dunduonline" target="_blank" style="color: #00457C; text-decoration: none;">paypal@dunduonline</a></p>
+  </div>
+  <div style="margin-top: 10px; margin-bottom: 20px;">
+    <a href="https://paypal.me/dunduonline" target="_blank" style="text-decoration: none;">
+      <button style="background-color: #00457C; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: bold; width: 80%; transition: 0.3s;">
+        Donate via PayPal
+      </button>
+    </a>
   </div>
   <div class="socialbar">
     <a id="github" href="https://github.com/profitprojectsonline" target="_blank"><svg viewBox="0 0 16 16" class="bi bi-github" fill="currentColor" height="16" width="16" xmlns="http://www.w3.org/2000/svg">
@@ -1099,10 +1150,10 @@ def render_sidebar():
 <style>
 /* From Uiverse.io by aadium - Tags: neumorphism, profile, card */
 .card {
-  width: 230px;
-  height: 280px;
+  width: 260px;
+  height: 320px;
   border-radius: 2em;
-  padding: 10px;
+  padding: 15px;
   background-color: #191919;
   box-shadow: 5px 5px 30px rgb(4, 4, 4),
                    -5px -5px 30px rgb(57, 57, 57);
@@ -1169,7 +1220,6 @@ def render_sidebar():
 
         return selected
 
-
 # Home page
 
 
@@ -1179,8 +1229,7 @@ def render_home():
         <div style="text-align: center; padding: 20px;" class="pattern-bg">
             <h1 style="font-size: 3em; background: linear-gradient(135deg, #0000CD, #4ECDC4);
                        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-                       background-clip: text; margin-bottom: 10px;">
-                <span class="icon-animated">📊</span> DWAP
+                       background-clip: text; margin-bottom: 10px;"> DWAP
             </h1>
             <p style="font-size: 1.2em; color: #4ECDC4; margin-top: -10px;">Data Wrangling & Analytics Platform</p>
         </div>
@@ -1193,7 +1242,7 @@ def render_home():
         st.markdown(
             """
         <div class="enhanced-card">
-            <h3><span class="icon-animated">📤</span> Upload</h3>
+            <h3> Upload</h3>
             <p>Support for multiple file formats including CSV, Excel, JSON, PDF, and DOCX</p>
         </div>
         <div class="item-hints">
@@ -1327,7 +1376,7 @@ def render_home():
         st.markdown(
             """
         <div class="enhanced-card">
-            <h3><span class="icon-animated">⚙️</span> Process</h3>
+            <h3> Process</h3>
             <p>Advanced data cleaning, transformation, and quality improvement tools</p>
         </div>
         <div class="item-hints">
@@ -1461,7 +1510,7 @@ def render_home():
         st.markdown(
             """
         <div class="enhanced-card">
-            <h3><span class="icon-animated">📈</span> Visualize</h3>
+            <h3> Visualize</h3>
             <p>Interactive dashboards and comprehensive data analysis</p>
         </div>
         <div class="item-hints">
@@ -1612,27 +1661,26 @@ def render_home():
 
     # Features overview
     st.markdown("""
-        <h2 style="text-align: center; color: #4ECDC4;">
-            <span class="icon-animated">✨</span> Key Features
+        <h2 style="text-align: center; color: #4ECDC4;"> Key Features
         </h2>
     """, unsafe_allow_html=True)
 
     features = [
-        ("<span class='icon-animated'>🔄</span>", "**Automated Data Cleaning**",
+        (" ", "**Automated Data Cleaning**",
          "Remove duplicates, handle missing values, standardize formats"),
-        ("<span class='icon-animated'>📊</span>", "**Interactive Visualizations**",
+        (" ", "**Interactive Visualizations**",
          "Dynamic charts, graphs, and statistical analysis"),
-        ("<span class='icon-animated'>🗄️</span>", "**Searchable Database**",
+        (" ", "**Searchable Database**",
          "Organize and retrieve your processed datasets"),
-        ("<span class='icon-animated'>📧</span>",
+        (" ",
          "**Email Integration**", "Share results directly via email"),
-        ("<span class='icon-animated'>⚡</span>", "**Real-time Processing**",
+        (" ", "**Real-time Processing**",
          "Fast data transformation with progress tracking"),
-        ("<span class='icon-animated'>🎨</span>", "**Modern Interface**",
+        (" ", "**Modern Interface**",
          "Intuitive design with smooth animations"),
-        ("<span class='icon-animated'>🤖</span>", "**Machine Learning**",
+        (" ", "**Machine Learning**",
          "Auto-run ML models with XGBoost and linear regression"),
-        ("<span class='icon-animated'>🚀</span>", "**Feature Engineering**",
+        (" ", "**Feature Engineering**",
          "Advanced feature scaling, encoding, and selection"),
     ]
 
@@ -1923,12 +1971,11 @@ header .slider {
 
     st.divider()
 
-
 # Upload data page
 
 
 def render_upload():
-    st.markdown("## 📤 Upload Your Data")
+    st.markdown("## Upload Your Data")
 
     # File uploader
     uploaded_file = st.file_uploader(
@@ -1969,7 +2016,7 @@ def render_upload():
 
                     st.markdown("""
                         <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                            <span class="icon-animated">✅</span> Data loaded successfully!
+                            <span class="icon-animated"> </span> Data loaded successfully!
                         </div>
                     """, unsafe_allow_html=True)
 
@@ -1994,7 +2041,6 @@ def render_upload():
                             f"{df.memory_usage(deep=True).sum() / 1024:.1f} KB",
                         )
 
-
 # Process data page
 
 
@@ -2003,7 +2049,8 @@ def render_process():
     st.divider()
 
     if st.session_state.current_data is None:
-        st.warning("⚠️ Please upload data first!")
+        st.warning(
+            " Please upload data first!")
         return
 
     df = st.session_state.current_data
@@ -2057,14 +2104,14 @@ def render_process():
 
             st.markdown("""
                 <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                    <span class="icon-animated">✅</span> Data processing complete!
+                    <span class="icon-animated"> </span> Data processing complete!
                 </div>
             """, unsafe_allow_html=True)
 
             # Auto-run ML models
             st.markdown("""
                 <div class="notification-info" style="animation: slideInRight 0.6s ease-out;">
-                    <span class="icon-animated">🤖</span> Running automatic ML model evaluation...
+                    <span class="icon-animated"> </span> Running automatic ML model evaluation...
                 </div>
             """, unsafe_allow_html=True)
             try:
@@ -2075,7 +2122,7 @@ def render_process():
 
                 if auto_ml_results.get('best_model'):
                     st.success(
-                        f"✅ Auto-ML complete! Best model: {auto_ml_results['best_model']} (R² Score: {auto_ml_results['best_score']:.4f})")
+                        f" Auto-ML complete! Best model: {auto_ml_results['best_model']} (R² Score: {auto_ml_results['best_score']:.4f})")
             except Exception as e:
                 st.warning(f"Auto-ML evaluation skipped: {str(e)}")
 
@@ -2111,7 +2158,6 @@ def render_process():
             st.dataframe(processed_df.head(10), use_container_width=True)
             st.divider()
 
-
 # Dashboard page
 
 
@@ -2121,7 +2167,8 @@ def render_dashboard():
     st.divider()
 
     if st.session_state.current_data is None:
-        st.warning("⚠️ Please upload and process data first!")
+        st.warning(
+            " Please upload and process data first!")
         return
 
     df = st.session_state.current_data
@@ -2191,10 +2238,30 @@ def render_dashboard():
     # Correlation analysis
     if "correlation" in dashboard_components:
         st.divider()
-        st.markdown("###  Correlation Analysis")
+        st.markdown("###  Correlation & Advanced Insights")
         st.divider()
-        st.plotly_chart(
-            dashboard_components["correlation"], use_container_width=True)
+        
+        col_corr, col_adv = st.columns(2)
+        with col_corr:
+            st.plotly_chart(dashboard_components["correlation"], use_container_width=True)
+        
+        with col_adv:
+            # Add notebook visualization components manually
+            st.markdown("#### Marketing & Conversion Benchmarks")
+            if 'converted' in df.columns:
+                fig_lang = st.session_state.viz_engine.plot_conversion_by_language(df)
+                if fig_lang:
+                    st.plotly_chart(fig_lang, use_container_width=True)
+                
+                fig_reach = st.session_state.viz_engine.plot_daily_reach(df)
+                if fig_reach:
+                    st.plotly_chart(fig_reach, use_container_width=True)
+                
+                fig_channel = st.session_state.viz_engine.plot_conversion_by_channel(df)
+                if fig_channel:
+                    st.plotly_chart(fig_channel, use_container_width=True)
+            else:
+                st.info("Upload marketing-tagged data to see conversion benchmarks.")
 
     # Time series analysis
     if "time_series" in dashboard_components:
@@ -2236,17 +2303,16 @@ def render_dashboard():
         )
         st.plotly_chart(custom_fig, use_container_width=True)
 
-
 # Database page
 
 
 def render_database():
-    st.markdown("## 💾 Database Management")
+    st.markdown("## Database Management")
     st.divider()
 
     # Save current dataset
     if st.session_state.current_data is not None:
-        st.markdown("### 💾 Save Current Dataset")
+        st.markdown("### Save Current Dataset")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -2257,7 +2323,7 @@ def render_database():
         tags_input = st.text_input("Tags (comma-separated)", value="")
         tags = [tag.strip() for tag in tags_input.split(",") if tag.strip()]
 
-        if st.button("💾 Save to Database"):
+        if st.button(" Save to Database"):
             metadata = {
                 "name": dataset_name,
                 "description": dataset_description,
@@ -2281,25 +2347,25 @@ def render_database():
             if dataset_id:
                 st.markdown(f"""
                     <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                        <span class="icon-animated">✅</span> Dataset saved with ID: {dataset_id}
+                        <span class="icon-animated"> </span> Dataset saved with ID: {dataset_id}
                     </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
                     <div class="notification-error" style="animation: slideInRight 0.5s ease-out;">
-                        <span class="icon-animated">❌</span> Failed to save dataset
+                        <span class="icon-animated"> </span> Failed to save dataset
                     </div>
                 """, unsafe_allow_html=True)
 
     # Search and browse datasets
 
-    st.markdown("### 🔍 Browse Saved Datasets")
+    st.markdown("### Browse Saved Datasets")
     st.divider()
 
     col1, col2 = st.columns(2)
     with col1:
         search_query = st.text_input(
-            "🔍 Search datasets", placeholder="Enter keywords..."
+            " Search datasets", placeholder="Enter keywords..."
         )
     with col2:
         filter_by_user = st.checkbox("Show only my datasets")
@@ -2313,7 +2379,7 @@ def render_database():
         st.markdown(f"Found {len(datasets)} dataset(s)")
 
         for dataset in datasets:
-            with st.expander(f"📊 {dataset['name']} (ID: {dataset['id']})"):
+            with st.expander(f" {dataset['name']} (ID: {dataset['id']})"):
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
@@ -2336,17 +2402,18 @@ def render_database():
 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button(f"📥 Load", key=f"load_{dataset['id']}"):
+                    if st.button(f" Load", key=f"load_{dataset['id']}"):
                         loaded_df = st.session_state.db_manager.load_dataset(
                             dataset["id"]
                         )
                         if loaded_df is not None:
                             st.session_state.current_data = loaded_df
-                            st.success("✅ Dataset loaded successfully!")
+                            st.success(
+                                " Dataset loaded successfully!")
                             st.rerun()
 
                 with col2:
-                    if st.button(f"📋 View Details", key=f"details_{dataset['id']}"):
+                    if st.button(f" View Details", key=f"details_{dataset['id']}"):
                         metadata = st.session_state.db_manager.get_dataset_metadata(
                             dataset["id"]
                         )
@@ -2354,50 +2421,52 @@ def render_database():
                             st.json(metadata)
 
                 with col3:
-                    if st.button(f"🗑️ Delete", key=f"delete_{dataset['id']}"):
+                    if st.button(f" Delete", key=f"delete_{dataset['id']}"):
                         if st.session_state.db_manager.delete_dataset(dataset["id"]):
-                            st.success("✅ Dataset deleted successfully!")
+                            st.success(
+                                " Dataset deleted successfully!")
                             st.rerun()
                         else:
-                            st.error("❌ Failed to delete dataset")
+                            st.error(
+                                " Failed to delete dataset")
     else:
         st.info("No datasets found. Upload and save some data first!")
-
 
 # Share results page
 
 
 def render_share_results():
     st.divider()
-    st.markdown("## 📧 Share Your Results")
+    st.markdown("## Share Your Results")
     st.divider()
 
     if st.session_state.current_data is None:
-        st.warning("⚠️ Please upload and process data first!")
+        st.warning(
+            " Please upload and process data first!")
         return
 
     df = st.session_state.current_data
 
     # Email sharing section
     st.divider()
-    st.markdown("### 📧 Email Sharing")
+    st.markdown("### Email Sharing")
     st.divider()
 
     col1, col2 = st.columns(2)
 
     with col1:
         recipient_email = st.text_input(
-            "📧 Recipient Email", placeholder="recipient@example.com"
+            " Recipient Email", placeholder="recipient@example.com"
         )
         export_format = st.selectbox(
-            "📄 Export Format", ["csv", "excel", "json"])
+            " Export Format", ["csv", "excel", "json"])
 
     with col2:
         include_summary = st.checkbox("Include Data Summary", value=True)
         include_visualizations = st.checkbox(
             "Include Visualizations", value=False)
 
-    if st.button("📧 Send Email", type="primary"):
+    if st.button(" Send Email", type="primary"):
         if not recipient_email:
             st.error("Please enter a recipient email address")
         elif not st.session_state.email_service.validate_email(recipient_email):
@@ -2427,52 +2496,52 @@ def render_share_results():
                 if success:
                     st.markdown(f"""
                         <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                            <span class="icon-animated">✅</span> Email sent successfully to {recipient_email}!
+                            <span class="icon-animated"> </span> Email sent successfully to {recipient_email}!
                         </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown("""
                         <div class="notification-error" style="animation: slideInRight 0.5s ease-out;">
-                            <span class="icon-animated">❌</span> Failed to send email
+                            <span class="icon-animated"> </span> Failed to send email
                         </div>
                     """, unsafe_allow_html=True)
 
     # Download section
     st.divider()
-    st.markdown("### 💾 Download Data")
+    st.markdown("### Download Data")
     st.divider()
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📥 Download CSV"):
+        if st.button(" Download CSV"):
             csv_data = df.to_csv(index=False)
             st.download_button(
-                label="💾 Download CSV File",
+                label=" Download CSV File",
                 data=csv_data,
                 file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
             )
 
     with col2:
-        if st.button("📥 Download Excel"):
+        if st.button(" Download Excel"):
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
                 df.to_excel(writer, index=False, sheet_name="Processed_Data")
             excel_data = output.getvalue()
 
             st.download_button(
-                label="💾 Download Excel File",
+                label=" Download Excel File",
                 data=excel_data,
                 file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
     with col3:
-        if st.button("📥 Download JSON"):
+        if st.button(" Download JSON"):
             json_data = df.to_json(orient="records", indent=2)
             st.download_button(
-                label="💾 Download JSON File",
+                label=" Download JSON File",
                 data=json_data,
                 file_name=f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json",
@@ -2480,13 +2549,13 @@ def render_share_results():
 
     # Data preview
     st.divider()
-    st.markdown("### 👀 Data Preview")
+    st.markdown("### Data Preview")
     st.divider()
     st.dataframe(df.head(20), use_container_width=True)
 
     # Summary statistics
     st.divider()
-    st.markdown("### 📊 Summary Statistics")
+    st.markdown("### Summary Statistics")
     st.divider()
     if df.select_dtypes(include=[np.number]).columns.any():
         st.dataframe(df.describe(), use_container_width=True)
@@ -2496,11 +2565,12 @@ def render_share_results():
 
 # Feature Engineering page
 def render_feature_engineering():
-    st.markdown("## 🔬 Feature Engineering")
+    st.markdown("## Feature Engineering")
     st.divider()
 
     if st.session_state.current_data is None:
-        st.warning("⚠️ Please upload data first!")
+        st.warning(
+            " Please upload data first!")
         return
 
     df = st.session_state.current_data.copy()
@@ -2508,14 +2578,14 @@ def render_feature_engineering():
     categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
 
     # Feature Engineering Options
-    st.markdown("### 🛠️ Feature Engineering Tools")
+    st.markdown("### Feature Engineering Tools")
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Scaling & Normalization",
-        "🔢 Polynomial Features",
-        "🏷️ Encoding",
-        "🎯 Feature Selection",
-        "🔍 Outlier Detection"
+        " Scaling & Normalization",
+        " Polynomial Features",
+        " Encoding",
+        " Feature Selection",
+        " Outlier Detection"
     ])
 
     with tab1:
@@ -2546,7 +2616,7 @@ def render_feature_engineering():
 
                     st.session_state.feature_engineered_data = df
                     st.success(
-                        f"✅ Applied {scaling_method} to {len(cols_to_scale)} columns!")
+                        f" Applied {scaling_method} to {len(cols_to_scale)} columns!")
 
                     # Show before/after comparison
                     col1, col2 = st.columns(2)
@@ -2578,7 +2648,7 @@ def render_feature_engineering():
 
                     poly_df = pd.DataFrame(poly_data, columns=feature_names)
                     st.success(
-                        f"✅ Generated {len(feature_names)} polynomial features!")
+                        f" Generated {len(feature_names)} polynomial features!")
                     st.dataframe(poly_df.head())
 
                     # Merge with original data
@@ -2613,7 +2683,7 @@ def render_feature_engineering():
 
                     st.session_state.feature_engineered_data = df
                     st.success(
-                        f"✅ Applied {encoding_method} to {len(cols_to_encode)} columns!")
+                        f" Applied {encoding_method} to {len(cols_to_encode)} columns!")
                     st.dataframe(df.head())
 
     with tab4:
@@ -2700,40 +2770,44 @@ def render_feature_engineering():
     # Save engineered features
     st.divider()
     if st.session_state.feature_engineered_data is not None:
-        st.markdown("### 💾 Save Engineered Features")
+        st.markdown("### Save Engineered Features")
         if st.button("Apply to Current Dataset"):
             st.session_state.current_data = st.session_state.feature_engineered_data
-            st.success("✅ Feature engineered data saved to current dataset!")
+            st.success(
+                " Feature engineered data saved to current dataset!")
 
 
 # Machine Learning page
 def render_machine_learning():
-    st.markdown("## 🤖 Machine Learning Models")
+    st.markdown("## Machine Learning Models")
     st.divider()
 
     if st.session_state.current_data is None:
-        st.warning("⚠️ Please upload data first!")
+        st.warning(
+            " Please upload data first!")
         return
 
     df = st.session_state.current_data.copy()
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
     if len(numeric_cols) < 2:
-        st.warning("⚠️ Need at least 2 numeric columns for ML models")
+        st.warning(
+            " Need at least 2 numeric columns for ML models")
         return
 
     # ML Model tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📈 Regression",
-        "🎯 Classification",
-        "🔮 Clustering",
-        "🧠 Neural Networks",
-        "🚀 XGBoost",
-        "📊 Linear Models"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        " Regression",
+        " Classification",
+        " Clustering",
+        " Neural Networks",
+        " XGBoost",
+        " Linear Models",
+        " Financial ML (RNN/AE)"
     ])
 
     with tab1:
-        st.markdown("### 📈 Regression Models")
+        st.markdown("### Regression Models")
         target_col = st.selectbox(
             "Select Target Variable", numeric_cols, key="reg_target")
         feature_cols = st.multiselect("Select Feature Variables", [
@@ -2819,7 +2893,7 @@ def render_machine_learning():
                     st.plotly_chart(fig_imp, use_container_width=True)
 
     with tab2:
-        st.markdown("### 🎯 Classification Models")
+        st.markdown("### Classification Models")
         st.info("For classification, ensure your target variable has discrete classes")
 
         target_col_cls = st.selectbox(
@@ -2831,6 +2905,7 @@ def render_machine_learning():
             "Logistic Regression",
             "Random Forest Classifier",
             "Gradient Boosting Classifier",
+            "AdaBoost Classifier (from notebooks)",
             "K-Neighbors Classifier",
             "Decision Tree Classifier",
             "Naive Bayes",
@@ -2858,6 +2933,9 @@ def render_machine_learning():
                     model = KNeighborsClassifier(n_neighbors=5)
                 elif cls_model_type == "Decision Tree Classifier":
                     model = DecisionTreeClassifier(random_state=42)
+                elif cls_model_type == "AdaBoost Classifier (from notebooks)":
+                    model = AdaBoostClassifier(
+                        n_estimators=100, random_state=42)
                 elif cls_model_type == "Naive Bayes":
                     model = GaussianNB()
                 elif cls_model_type == "SVM Classifier":
@@ -2882,7 +2960,7 @@ def render_machine_learning():
                 st.plotly_chart(fig_cm, use_container_width=True)
 
     with tab3:
-        st.markdown("### 🔮 Clustering Models")
+        st.markdown("### Clustering Models")
         cluster_cols = st.multiselect(
             "Select Features for Clustering", numeric_cols, key="cluster_features")
         cluster_method = st.selectbox(
@@ -2931,7 +3009,7 @@ def render_machine_learning():
                 st.bar_chart(cluster_counts)
 
     with tab4:
-        st.markdown("### 🧠 Neural Network")
+        st.markdown("### Neural Network")
         st.info("Configure a Multi-Layer Perceptron neural network")
 
         nn_target = st.selectbox(
@@ -2967,25 +3045,54 @@ def render_machine_learning():
                 X_train_scaled = scaler.fit_transform(X_train)
                 X_test_scaled = scaler.transform(X_test)
 
-                if task_type == "Regression":
-                    model = MLPRegressor(hidden_layer_sizes=hidden, max_iter=max_iterations,
-                                         learning_rate_init=learning_rate, activation=activation, random_state=42)
-                    model.fit(X_train_scaled, y_train)
-                    y_pred = model.predict(X_test_scaled)
-                    mse = mean_squared_error(y_test, y_pred)
-                    r2 = r2_score(y_test, y_pred)
-                    st.metric("MSE", f"{mse:.4f}")
-                    st.metric("R² Score", f"{r2:.4f}")
+                nn_impl = st.radio("Implementation", [
+                                   "Scikit-Learn (MLP)", "Custom (from notebooks)"], horizontal=True)
+
+                if nn_impl == "Scikit-Learn (MLP)":
+                    if task_type == "Regression":
+                        model = MLPRegressor(hidden_layer_sizes=hidden, max_iter=max_iterations,
+                                             learning_rate_init=learning_rate, activation=activation, random_state=42)
+                        model.fit(X_train_scaled, y_train)
+                        y_pred = model.predict(X_test_scaled)
+                        
+                        st.markdown("#### Model Performance")
+                        col1, col2 = st.columns(2)
+                        with col1: st.metric("MSE", f"{mean_squared_error(y_test, y_pred):.4f}")
+                        with col2: st.metric("R² Score", f"{r2_score(y_test, y_pred):.4f}")
+                    else:
+                        y_train_enc = LabelEncoder().fit_transform(y_train)
+                        y_test_enc = LabelEncoder().fit_transform(y_test)
+                        model = MLPClassifier(hidden_layer_sizes=hidden, max_iter=max_iterations,
+                                              learning_rate_init=learning_rate, activation=activation, random_state=42)
+                        model.fit(X_train_scaled, y_train_enc)
+                        y_pred = model.predict(X_test_scaled)
+                        
+                        st.markdown("#### Model Performance")
+                        col1, col2 = st.columns(2)
+                        with col1: st.metric("Accuracy", f"{accuracy_score(y_test_enc, y_pred):.2%}")
+                        with col2: st.metric("F1 Score", f"{f1_score(y_test_enc, y_pred, average='weighted'):.2%}")
                 else:
-                    y_encoded = LabelEncoder().fit_transform(y)
-                    y_train_enc = LabelEncoder().fit_transform(y_train)
-                    y_test_enc = LabelEncoder().fit_transform(y_test)
-                    model = MLPClassifier(hidden_layer_sizes=hidden, max_iter=max_iterations,
-                                          learning_rate_init=learning_rate, activation=activation, random_state=42)
-                    model.fit(X_train_scaled, y_train_enc)
-                    y_pred = model.predict(X_test_scaled)
-                    acc = accuracy_score(y_test_enc, y_pred)
-                    st.metric("Accuracy", f"{acc:.2%}")
+                    # Custom Implementation supporting multiple layers
+                    st.info(f"Using deep Neural Network with {len(hidden)} hidden layers: {hidden}")
+                    input_nodes = X_train_scaled.shape[1]
+                    output_nodes = 1 if task_type == "Regression" else len(np.unique(y))
+                    
+                    model = NeuralNetworkWrapper(input_nodes, output_nodes, list(hidden), learning_rate)
+                    
+                    if task_type == "Classification":
+                        le = LabelEncoder()
+                        y_train_enc = le.fit_transform(y_train)
+                        y_test_enc = le.transform(y_test)
+                        model.fit_dataset(X_train_scaled, y_train_enc, epochs=10)
+                        y_pred = model.predict_classes(X_test_scaled)
+                        
+                        st.markdown("#### Model Performance (Deep NN)")
+                        col1, col2 = st.columns(2)
+                        with col1: st.metric("Accuracy", f"{accuracy_score(y_test_enc, y_pred):.2%}")
+                        with col2: st.metric("Precision", f"{precision_score(y_test_enc, y_pred, average='weighted', zero_division=0):.2%}")
+                    else:
+                        st.error("Custom implementation currently supports Classification only.")
+                        model = None
 
                 st.session_state.trained_models['neural_network'] = model
 
@@ -2999,7 +3106,8 @@ def render_machine_learning():
 
     # XGBoost Tab
     with tab5:
-        st.markdown("### 🚀 XGBoost - Advanced Gradient Boosting")
+        st.markdown(
+            "### XGBoost - Advanced Gradient Boosting")
         st.info(
             "XGBoost is a powerful gradient boosting algorithm that excels at structured/tabular data.")
 
@@ -3025,7 +3133,7 @@ def render_machine_learning():
         col_train, col_pred = st.columns(2)
 
         with col_train:
-            if st.button("🎯 Train XGBoost Model", key="train_xgb"):
+            if st.button(" Train XGBoost Model", key="train_xgb"):
                 if xgb_features:
                     with st.spinner("Training XGBoost model..."):
                         params = {
@@ -3044,12 +3152,13 @@ def render_machine_learning():
                         if 'error' not in result:
                             st.markdown("""
                                 <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                                    <span class="icon-animated">✅</span> XGBoost model trained successfully!
+                                    <span class="icon-animated"> </span> XGBoost model trained successfully!
                                 </div>
                             """, unsafe_allow_html=True)
 
                             # Display metrics
-                            st.markdown("#### 📊 Model Metrics")
+                            st.markdown(
+                                "#### Model Metrics")
                             metrics = result['metrics']
 
                             if xgb_task == "Regression":
@@ -3074,12 +3183,12 @@ def render_machine_learning():
                                         "Recall", f"{metrics['Recall']:.4f}")
 
                             st.info(
-                                f"💾 Model saved to: {result['model_path']}")
+                                f" Model saved to: {result['model_path']}")
                         else:
                             st.error(f"Error: {result['error']}")
 
         with col_pred:
-            if st.button("🔮 Make Predictions", key="xgb_predict"):
+            if st.button(" Make Predictions", key="xgb_predict"):
                 if xgb_features:
                     with st.spinner("Making predictions..."):
                         predictions_df = st.session_state.ml_integration.make_predictions(
@@ -3090,18 +3199,19 @@ def render_machine_learning():
                             st.session_state.xgboost_predictions_df = predictions_df
                             st.markdown("""
                                 <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                                    <span class="icon-animated">✅</span> Predictions generated!
+                                    <span class="icon-animated"> </span> Predictions generated!
                                 </div>
                             """, unsafe_allow_html=True)
 
-                            st.markdown("#### 📊 Predictions vs Original Data")
+                            st.markdown(
+                                "#### Predictions vs Original Data")
                             st.dataframe(predictions_df.head(
                                 20), use_container_width=True)
 
                             # Download predictions
                             csv = predictions_df.to_csv(index=False)
                             st.download_button(
-                                label="📥 Download Predictions CSV",
+                                label=" Download Predictions CSV",
                                 data=csv,
                                 file_name="xgboost_predictions.csv",
                                 mime="text/csv"
@@ -3112,7 +3222,8 @@ def render_machine_learning():
 
     # Linear Models Tab
     with tab6:
-        st.markdown("### 📊 Statistical Linear Models")
+        st.markdown(
+            "### Statistical Linear Models")
         st.info("Advanced linear regression models using statsmodels library.")
 
         lin_target = st.selectbox(
@@ -3121,7 +3232,7 @@ def render_machine_learning():
                                       [c for c in numeric_cols if c != lin_target],
                                       key="lin_features")
 
-        if st.button("📈 Run Linear Models Analysis", key="run_linear"):
+        if st.button(" Run Linear Models Analysis", key="run_linear"):
             if lin_features:
                 with st.spinner("Running linear models analysis..."):
                     results = st.session_state.ml_integration.run_linear_models(
@@ -3132,7 +3243,7 @@ def render_machine_learning():
                         # OLS Results
                         if 'OLS' in results and 'error' not in results['OLS']:
                             st.markdown(
-                                "#### 📊 Ordinary Least Squares (OLS) Results")
+                                "#### Ordinary Least Squares (OLS) Results")
                             ols = results['OLS']
 
                             col1, col2, col3 = st.columns(3)
@@ -3151,13 +3262,13 @@ def render_machine_learning():
                                                      columns=['Variable', 'Coefficient'])
                             st.dataframe(params_df, use_container_width=True)
 
-                            with st.expander("📄 View Full Summary"):
+                            with st.expander(" View Full Summary"):
                                 st.text(ols['summary'])
 
                         # WLS Results
                         if 'WLS' in results and 'error' not in results['WLS']:
                             st.markdown(
-                                "#### 📊 Weighted Least Squares (WLS) Results")
+                                "#### Weighted Least Squares (WLS) Results")
                             wls = results['WLS']
 
                             col1, col2 = st.columns(2)
@@ -3169,6 +3280,19 @@ def render_machine_learning():
                                           f"{wls['adj_r_squared']:.4f}")
                     else:
                         st.error(f"Error: {results['error']}")
+
+    with tab7:
+        st.markdown("### Financial Machine Learning Components")
+        st.info("Advanced models for time series prediction and dimensionality reduction.")
+        
+        sub_tab1, sub_tab2 = st.tabs(["RNN/LSTM/GRU", "Autoencoders"])
+        
+        with sub_tab1:
+            render_rnn_component()
+            
+        with sub_tab2:
+            render_autoencoder_component()
+
 
 
 def main():
@@ -3186,6 +3310,11 @@ def main():
 
     # Render sidebar and get selected page
     selected_page = render_sidebar()
+
+    # Check for page transition to trigger loader
+    if "previous_page" in st.session_state and st.session_state.previous_page != selected_page:
+        show_transitional_loader()
+        st.session_state.previous_page = selected_page
 
     # Route to appropriate page
     if selected_page == "Home":

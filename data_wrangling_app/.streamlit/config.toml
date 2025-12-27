@@ -17,15 +17,6 @@ secondaryBackgroundColor = "#1a1a1a"
 textColor = "#FFFFFF"
 font = "sans serif"
 
-[client]
-caching = true
-displayEnabled = true
-
-[runner]
-magicEnabled = true
-installTracer = false
-fixMatplotlib = true
-
 [logger]
 level = "info"
 messageFormat = "%(asctime)s %(message)s"

@@ -5,7 +5,10 @@ Handles dashboard creation and data plotting
 # Machine Learning Modules
 from datasets import *
 from sklearn import linear_model
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import (
+    mean_squared_error, r2_score, roc_curve, auc, 
+    precision_recall_curve, average_precision_score
+)
 
 import streamlit as st
 import pandas as pd
@@ -462,3 +465,129 @@ class VisualizationEngine:
         except Exception as e:
             logger.error(f"Error exporting plots: {str(e)}")
             return {}
+    def create_roc_curve(self, y_true, y_probs) -> go.Figure:
+        """Create ROC curve visualization"""
+        try:
+            fpr, tpr, _ = roc_curve(y_true, y_probs)
+            roc_auc = auc(fpr, tpr)
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=fpr, y=tpr, mode='lines',
+                name=f'ROC curve (area = {roc_auc:.2f})',
+                line=dict(color='darkorange', width=2)
+            ))
+            fig.add_trace(go.Scatter(
+                x=[0, 1], y=[0, 1], mode='lines',
+                line=dict(color='navy', width=2, dash='dash'),
+                showlegend=False
+            ))
+
+            fig.update_layout(
+                title='Receiver Operating Characteristic (ROC)',
+                xaxis_title='False Positive Rate',
+                yaxis_title='True Positive Rate',
+                template='plotly_dark',
+                height=400
+            )
+            return fig
+        except Exception as e:
+            logger.error(f"Error creating ROC curve: {str(e)}")
+            return go.Figure()
+
+    def create_precision_recall_curve(self, y_true, y_probs) -> go.Figure:
+        """Create Precision-Recall curve visualization"""
+        try:
+            precision, recall, _ = precision_recall_curve(y_true, y_probs)
+            avg_precision = average_precision_score(y_true, y_probs)
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=recall, y=precision, mode='lines',
+                name=f'Avg Precision = {avg_precision:.2f}',
+                line=dict(color='blue', width=2)
+            ))
+
+            fig.update_layout(
+                title='Precision-Recall Curve',
+                xaxis_title='Recall',
+                yaxis_title='Precision',
+                template='plotly_dark',
+                height=400
+            )
+            return fig
+        except Exception as e:
+            logger.error(f"Error creating PR curve: {str(e)}")
+            return go.Figure()
+
+    def plot_daily_reach(self, df: pd.DataFrame) -> go.Figure:
+        """Plot daily marketing reach by channel extracted from notebooks"""
+        try:
+            if 'date_served' not in df.columns or 'marketing_channel' not in df.columns:
+                return go.Figure()
+
+            daily_data = df.pivot_table(
+                values='user_id',
+                index='date_served',
+                columns='marketing_channel',
+                aggfunc='count'
+            )
+
+            fig = go.Figure()
+            for i, channel in enumerate(daily_data.columns):
+                fig.add_trace(go.Scatter(
+                    x=daily_data.index,
+                    y=daily_data[channel],
+                    mode='lines+markers',
+                    name=channel,
+                    line=dict(color=self.color_palette[i % len(self.color_palette)])
+                ))
+
+            fig.update_layout(
+                title='Daily Marketing Reach by Channel',
+                xaxis_title='Date',
+                yaxis_title='Number of Users',
+                template='plotly_dark',
+                hovermode='x unified'
+            )
+            return fig
+        except Exception as e:
+            logger.error(f"Error plotting daily reach: {str(e)}")
+            return go.Figure()
+
+    def plot_conversion_by_language(self, df: pd.DataFrame) -> Optional[go.Figure]:
+        """Plot conversion rates by language preferred"""
+        if 'language_preferred' not in df.columns or 'converted' not in df.columns:
+            return None
+        
+        conv_data = df.groupby('language_preferred')['converted'].mean().reset_index()
+        fig = px.bar(conv_data, x='language_preferred', y='converted', 
+                     title='Conversion Rate by Language',
+                     template='plotly_dark',
+                     color_discrete_sequence=[self.color_palette[0]])
+        return fig
+
+    def plot_conversion_by_channel(self, df: pd.DataFrame) -> Optional[go.Figure]:
+        """Plot conversion rates by marketing channel"""
+        channel_col = 'marketing_channel'
+        if channel_col not in df.columns:
+            # Try to find a similar column
+            potential_cols = [c for c in df.columns if 'channel' in c.lower()]
+            if potential_cols:
+                channel_col = potential_cols[0]
+            else:
+                return None
+                
+        if 'converted' not in df.columns:
+            return None
+            
+        try:
+            conv_data = df.groupby(channel_col)['converted'].mean().reset_index()
+            fig = px.bar(conv_data, x=channel_col, y='converted', 
+                         title=f'Conversion Rate by {channel_col}',
+                         template='plotly_dark',
+                         color_discrete_sequence=[self.color_palette[2]])
+            return fig
+        except Exception as e:
+            logger.error(f"Error plotting channel conversion: {str(e)}")
+            return None

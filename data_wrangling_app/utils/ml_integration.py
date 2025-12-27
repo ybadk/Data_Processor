@@ -3,23 +3,105 @@ Machine Learning Integration Module
 Integrates linear models, XGBoost, and auto-run ML capabilities
 """
 
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor, GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingRegressor
+from sklearn.svm import SVC, SVR
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
 from sklearn.metrics import (
     mean_squared_error, r2_score, mean_absolute_error,
     accuracy_score, precision_score, recall_score, f1_score,
-    classification_report, confusion_matrix
+    classification_report, confusion_matrix, roc_curve, auc,
+    precision_recall_curve, average_precision_score
 )
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split
+from scipy.special import expit as activation_function
+from scipy.stats import truncnorm, stats
 import pandas as pd
 import numpy as np
 import pickle
 import os
 from typing import Dict, Any, Tuple, List
+import logging
 import warnings
 warnings.filterwarnings('ignore')
+
+logger = logging.getLogger(__name__)
+
+def truncated_normal(mean=0, sd=1, low=0, upp=10):
+    return truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
+
+class NeuralNetworkWrapper:
+    """
+    Custom Neural Network implementation supporting multiple hidden layers.
+    """
+    def __init__(self, input_nodes, output_nodes, hidden_layers, learning_rate):
+        self.input_nodes = input_nodes
+        self.output_nodes = output_nodes
+        self.hidden_layers = hidden_layers if isinstance(hidden_layers, list) else [hidden_layers]
+        self.learning_rate = learning_rate
+        self.layers = [input_nodes] + self.hidden_layers + [output_nodes]
+        self.create_weight_matrices()
+
+    def create_weight_matrices(self):
+        self.weights = []
+        for i in range(len(self.layers) - 1):
+            rad = 1 / np.sqrt(self.layers[i])
+            X = truncated_normal(mean=0, sd=1, low=-rad, upp=rad)
+            w = X.rvs((self.layers[i+1], self.layers[i]))
+            self.weights.append(w)
+
+    def train(self, input_vector, target_vector):
+        input_vector = np.array(input_vector).reshape(-1, 1)
+        target_vector = np.array(target_vector).reshape(-1, 1)
+        
+        # Forward pass - store activations
+        activations = [input_vector]
+        current_input = input_vector
+        for w in self.weights:
+            current_input = activation_function(w @ current_input)
+            activations.append(current_input)
+            
+        # Backward pass
+        output_vector = activations[-1]
+        error = target_vector - output_vector
+        
+        for i in reversed(range(len(self.weights))):
+            # Calculate gradient for current layer
+            # delta = error * sigmoid_derivative(activations[i+1])
+            # activations[i+1] * (1.0 - activations[i+1]) is derivative of sigmoid
+            delta = error * activations[i+1] * (1.0 - activations[i+1])
+            
+            # Update weights
+            self.weights[i] += self.learning_rate * (delta @ activations[i].T)
+            
+            # Propagate error back to previous layer
+            error = self.weights[i].T @ error
+
+    def run(self, input_vector):
+        current_input = np.array(input_vector).reshape(-1, 1)
+        for w in self.weights:
+            current_input = activation_function(w @ current_input)
+        return current_input
+
+    def fit_dataset(self, X, y, epochs=10):
+        if len(y.shape) == 1:
+            num_classes = self.output_nodes
+            y_one_hot = np.zeros((y.size, num_classes))
+            y_one_hot[np.arange(y.size), y.astype(int)] = 1
+            y = y_one_hot
+            
+        for epoch in range(epochs):
+            for i in range(len(X)):
+                self.train(X[i], y[i])
+
+    def predict_classes(self, X):
+        predictions = []
+        for i in range(len(X)):
+            res = self.run(X[i])
+            predictions.append(res.argmax())
+        return np.array(predictions)
 
 # ML Libraries
 
@@ -276,6 +358,47 @@ class MLIntegration:
         except Exception as e:
             results['WLS'] = {'error': str(e)}
 
+        return results
+
+    def analyze_ab_test(self, df: pd.DataFrame, channel: str, subsegment: str = None) -> Dict[str, Any]:
+        """Perform A/B testing analysis extracted from notebooks"""
+        if 'variant' not in df.columns or 'converted' not in df.columns:
+            return {"error": "Required columns 'variant' or 'converted' missing"}
+
+        results = {}
+        if subsegment is None:
+            subsegmented_df = df[df['marketing_channel'] == channel] if 'marketing_channel' in df.columns else df
+            subscribers = subsegmented_df.groupby(['user_id', 'variant'])['converted'].max() if 'user_id' in df.columns else subsegmented_df.groupby(['variant'])['converted'].mean()
+            subscribers_df = pd.DataFrame(subscribers.unstack(level=1) if hasattr(subscribers, 'unstack') else subscribers)
+
+            if 'control' not in subscribers_df.columns or 'personalization' not in subscribers_df.columns:
+                 return {"error": "Control or Personalization group missing"}
+
+            control = subscribers_df['control'].dropna()
+            personalization = subscribers_df['personalization'].dropna()
+            lift = (np.mean(personalization) - np.mean(control)) / np.mean(control)
+            t_stat, p_val = stats.ttest_ind(control, personalization)
+
+            results['main_test'] = {
+                'lift': lift,
+                't_statistic': t_stat,
+                'p_value': p_val,
+                'control_count': len(control),
+                'personalization_count': len(personalization)
+            }
+        else:
+            for value in np.unique(df[subsegment].dropna().values):
+                sub_df = df[(df['marketing_channel'] == channel) & (df[subsegment] == value)] if 'marketing_channel' in df.columns else df[df[subsegment] == value]
+                subscribers = sub_df.groupby(['user_id', 'variant'])['converted'].max() if 'user_id' in df.columns else sub_df.groupby(['variant'])['converted'].mean()
+                subscribers_df = pd.DataFrame(subscribers.unstack(level=1) if hasattr(subscribers, 'unstack') else subscribers)
+
+                if 'control' in subscribers_df.columns and 'personalization' in subscribers_df.columns:
+                    control = subscribers_df['control'].dropna()
+                    personalization = subscribers_df['personalization'].dropna()
+                    if len(control) > 0 and len(personalization) > 0:
+                        lift = (np.mean(personalization) - np.mean(control)) / np.mean(control)
+                        t_stat, p_val = stats.ttest_ind(control, personalization)
+                        results[value] = {'lift': lift, 't_statistic': t_stat, 'p_value': p_val, 'control_count': len(control), 'personalization_count': len(personalization)}
         return results
 
     def get_model_comparison(self) -> pd.DataFrame:
