@@ -19,10 +19,11 @@ import hashlib
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class DatabaseManager:
     """Manages database operations for the data wrangling application"""
     
-    def __init__(self, db_path: str = "data_wrangling.db"):
+    def __init__(self, db_path: str="data_wrangling.db"):
         self.db_path = db_path
         self.engine = create_engine(f"sqlite:///{db_path}")
         self.init_database()
@@ -45,6 +46,10 @@ class DatabaseManager:
                         file_type TEXT,
                         processing_log TEXT,
                         user_email TEXT,
+                        user_name TEXT,
+                        company_name TEXT,
+                        user_location TEXT,
+                        user_country TEXT,
                         tags TEXT
                     )
                 """))
@@ -58,21 +63,16 @@ class DatabaseManager:
                         parameters TEXT,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         user_email TEXT,
+                        user_name TEXT,
+                        company_name TEXT,
+                        user_location TEXT,
+                        user_country TEXT,
                         FOREIGN KEY (dataset_id) REFERENCES datasets (id)
                     )
                 """))
                 
-                # Create user_sessions table
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS user_sessions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_id TEXT UNIQUE,
-                        user_email TEXT,
-                        start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        datasets_processed INTEGER DEFAULT 0
-                    )
-                """))
+                # Add columns if they don't exist (migration)
+                self._add_missing_columns(conn)
                 
                 conn.commit()
                 logger.info("Database initialized successfully")
@@ -96,10 +96,12 @@ class DatabaseManager:
                 result = conn.execute(text("""
                     INSERT INTO datasets (
                         name, description, file_hash, file_size, row_count, 
-                        column_count, file_type, processing_log, user_email, tags
+                        column_count, file_type, processing_log, user_email, 
+                        user_name, company_name, user_location, user_country, tags
                     ) VALUES (
                         :name, :description, :file_hash, :file_size, :row_count,
-                        :column_count, :file_type, :processing_log, :user_email, :tags
+                        :column_count, :file_type, :processing_log, :user_email,
+                        :user_name, :company_name, :user_location, :user_country, :tags
                     )
                 """), {
                     'name': metadata.get('name', 'Unnamed Dataset'),
@@ -111,6 +113,10 @@ class DatabaseManager:
                     'file_type': metadata.get('file_type', 'unknown'),
                     'processing_log': json.dumps(metadata.get('processing_log', [])),
                     'user_email': metadata.get('user_email', ''),
+                    'user_name': metadata.get('user_name', ''),
+                    'company_name': metadata.get('company_name', ''),
+                    'user_location': metadata.get('user_location', ''),
+                    'user_country': metadata.get('user_country', ''),
                     'tags': json.dumps(metadata.get('tags', []))
                 })
                 
@@ -149,7 +155,7 @@ class DatabaseManager:
             logger.error(f"Error loading dataset: {str(e)}")
             return None
     
-    def search_datasets(self, query: str = "", user_email: str = "") -> List[Dict[str, Any]]:
+    def search_datasets(self, query: str="", user_email: str="") -> List[Dict[str, Any]]:
         """Search datasets based on query and user email"""
         try:
             with self.engine.connect() as conn:
@@ -193,13 +199,16 @@ class DatabaseManager:
         except SQLAlchemyError as e:
             logger.error(f"Error searching datasets: {str(e)}")
             return []
-    
     def get_dataset_metadata(self, dataset_id: int) -> Optional[Dict[str, Any]]:
-        """Get metadata for a specific dataset"""
+        """Get dataset metadata including processing log"""
         try:
             with self.engine.connect() as conn:
                 result = conn.execute(text("""
-                    SELECT * FROM datasets WHERE id = :id
+                    SELECT id, name, description, file_hash, upload_date, 
+                           file_size, row_count, column_count, file_type, 
+                           processing_log, user_email, user_name, company_name, 
+                           user_location, user_country, tags
+                    FROM datasets WHERE id = :id
                 """), {'id': dataset_id})
                 
                 row = result.fetchone()
@@ -218,42 +227,56 @@ class DatabaseManager:
                     'file_type': row[8],
                     'processing_log': json.loads(row[9]) if row[9] else [],
                     'user_email': row[10],
-                    'tags': json.loads(row[11]) if row[11] else []
+                    'user_name': row[11] if len(row) > 11 else '',
+                    'company_name': row[12] if len(row) > 12 else '',
+                    'user_location': row[13] if len(row) > 13 else '',
+                    'user_country': row[14] if len(row) > 14 else '',
+                    'tags': json.loads(row[15]) if len(row) > 15 else []
                 }
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting dataset metadata: {str(e)}")
             return None
     
-    def log_processing_operation(self, dataset_id: int, operation: str, 
-                               parameters: Dict[str, Any], user_email: str = ""):
-        """Log a processing operation"""
+    def log_processing_operation(self, dataset_id: int, operation: str,
+                               parameters: Dict[str, Any], user_context: Dict[str, Any]={}):
+        """Log a processing operation with user context"""
         try:
             with self.engine.connect() as conn:
                 conn.execute(text("""
-                    INSERT INTO processing_history (dataset_id, operation, parameters, user_email)
-                    VALUES (:dataset_id, :operation, :parameters, :user_email)
+                    INSERT INTO processing_history (
+                        dataset_id, operation, parameters, user_email, 
+                        user_name, company_name, user_location, user_country
+                    )
+                    VALUES (
+                        :dataset_id, :operation, :parameters, :user_email,
+                        :user_name, :company_name, :user_location, :user_country
+                    )
                 """), {
                     'dataset_id': dataset_id,
                     'operation': operation,
                     'parameters': json.dumps(parameters),
-                    'user_email': user_email
+                    'user_email': user_context.get('email', ''),
+                    'user_name': user_context.get('name', ''),
+                    'company_name': user_context.get('company', ''),
+                    'user_location': user_context.get('location', ''),
+                    'user_country': user_context.get('country', '')
                 })
                 conn.commit()
                 
         except SQLAlchemyError as e:
             logger.error(f"Error logging operation: {str(e)}")
-    
     def get_processing_history(self, dataset_id: int) -> List[Dict[str, Any]]:
         """Get processing history for a dataset"""
         try:
             with self.engine.connect() as conn:
                 result = conn.execute(text("""
-                    SELECT operation, parameters, timestamp, user_email
-                    FROM processing_history
-                    WHERE dataset_id = :dataset_id
+                    SELECT operation, parameters, timestamp, user_email, 
+                           user_name, company_name, user_location, user_country
+                    FROM processing_history 
+                    WHERE dataset_id = :id
                     ORDER BY timestamp DESC
-                """), {'dataset_id': dataset_id})
+                """), {'id': dataset_id})
                 
                 history = []
                 for row in result:
@@ -261,7 +284,11 @@ class DatabaseManager:
                         'operation': row[0],
                         'parameters': json.loads(row[1]) if row[1] else {},
                         'timestamp': row[2],
-                        'user_email': row[3]
+                        'user_email': row[3],
+                        'user_name': row[4] if len(row) > 4 else '',
+                        'company_name': row[5] if len(row) > 5 else '',
+                        'user_location': row[6] if len(row) > 6 else '',
+                        'user_country': row[7] if len(row) > 7 else ''
                     })
                 
                 return history
@@ -342,6 +369,21 @@ class DatabaseManager:
             logger.error(f"Error getting statistics: {str(e)}")
             return {}
     
+    def _add_missing_columns(self, conn):
+        """Add columns to existing tables if they don't exist"""
+        tables_to_update = {
+            'datasets': ['user_name', 'company_name', 'user_location', 'user_country'],
+            'processing_history': ['user_name', 'company_name', 'user_location', 'user_country']
+        }
+        
+        for table, columns in tables_to_update.items():
+            for col in columns:
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} TEXT"))
+                except Exception:
+                    # Column likely already exists
+                    pass
+
     def _generate_hash(self, df: pd.DataFrame) -> str:
         """Generate a hash for the dataset"""
         # Create a hash based on the dataframe content

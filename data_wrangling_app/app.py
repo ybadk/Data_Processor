@@ -431,6 +431,18 @@ def init_session_state():
         st.session_state.processing_complete = False
     if "user_email" not in st.session_state:
         st.session_state.user_email = ""
+    if "user_name" not in st.session_state:
+        st.session_state.user_name = ""
+    if "company_name" not in st.session_state:
+        st.session_state.company_name = ""
+    if "user_location" not in st.session_state:
+        st.session_state.user_location = ""
+    if "user_country" not in st.session_state:
+        st.session_state.user_country = ""
+    if "show_contract" not in st.session_state:
+        st.session_state.show_contract = False
+    if "selected_plan" not in st.session_state:
+        st.session_state.selected_plan = None
     # ML Model states
     if "ml_model" not in st.session_state:
         st.session_state.ml_model = None
@@ -474,7 +486,7 @@ def show_transitional_loader():
         with placeholder.container():
             # Centered loader container styling
             st.markdown(
-                f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>', 
+                f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>',
                 unsafe_allow_html=True
             )
             time.sleep(7)
@@ -1079,21 +1091,28 @@ def render_sidebar():
             },
         )
 
-        # User email input
-        st.markdown("---")
-        st.markdown(
-            "### User Information", unsafe_allow_html=True)
-        st.write(
-            "Enter your email address below, so you can send updated datasets and visualizations to your personal or business email for offline review."
-        )
-        user_email = st.text_input(
-            "Email Address",
-            value=st.session_state.user_email,
-            placeholder="your.email@example.com",
-        )
-        st.button("Submit")
-        if user_email != st.session_state.user_email:
-            st.session_state.user_email = user_email
+        # User information section
+        st.sidebar.markdown("### 👤 User Information")
+        with st.sidebar.expander("Edit Profile", expanded=not st.session_state.user_email):
+            user_name = st.text_input("Name", st.session_state.user_name if 'user_name' in st.session_state else "")
+            user_email = st.text_input("Email", st.session_state.user_email if 'user_email' in st.session_state else "")
+            company_name = st.text_input("Company Name", st.session_state.company_name if 'company_name' in st.session_state else "")
+            location = st.text_input("Location (City/State)", st.session_state.user_location if 'user_location' in st.session_state else "")
+            country = st.text_input("Country", st.session_state.user_country if 'user_country' in st.session_state else "")
+            
+            if st.button("Save Profile"):
+                st.session_state.user_name = user_name
+                st.session_state.user_email = user_email
+                st.session_state.company_name = company_name
+                st.session_state.user_location = location
+                st.session_state.user_country = country
+                st.success("Profile updated!")
+                st.rerun()
+
+        if 'user_email' in st.session_state and st.session_state.user_email:
+            st.sidebar.info(f"Logged in as: {st.session_state.user_name if 'user_name' in st.session_state and st.session_state.user_name else st.session_state.user_email}")
+            if 'company_name' in st.session_state and st.session_state.company_name:
+                st.sidebar.info(f"🏢 {st.session_state.company_name}")
 
         # Company info
         st.markdown("---")
@@ -1809,7 +1828,11 @@ def render_home():
       </div>
     </div>
   </div>
-  <button>Contact Us</button>
+  <div style="text-align: center; margin-top: 20px;">
+    <button onclick="window.location.href='#contract-section'" style="background: linear-gradient(135deg, #0000CD, #4ECDC4); color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: bold;">
+        Select Plan / Contact
+    </button>
+  </div>
 </div>
 
 <style>
@@ -1970,6 +1993,55 @@ header .slider {
         )
 
     st.divider()
+    render_contract_section()
+
+
+def render_contract_section():
+    """Render the contract selection and payment section"""
+    st.markdown('<div id="contract-section"></div>', unsafe_allow_html=True)
+    st.markdown("## 📜 Service Contract & Plan Selection")
+    
+    if 'user_email' not in st.session_state or not st.session_state.user_email:
+        st.warning("Please fill in your User Information in the sidebar before proceeding with a contract.")
+        return
+
+    with st.container():
+        st.markdown("""
+            <div class="enhanced-card" style="padding: 25px;">
+                <h4>Select Your Data Analytics Plan</h4>
+                <p>Choose the option that best fits your business needs. All plans include 24/7 priority support.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        plans = {
+            "Starter (R299)": {"price": "299", "name": "DWAP Starter"},
+            "Professional (R799)": {"price": "799", "name": "DWAP Professional"},
+            "Enterprise (R2499)": {"price": "2499", "name": "DWAP Enterprise AI"}
+        }
+        
+        selected_plan_name = st.radio("Available Plans", list(plans.keys()), key="contract_plan_radio")
+        plan_details = plans[selected_plan_name]
+        
+        # User details check for contract
+        st.markdown("### Contract Details")
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            st.write(f"**Client Name:** {st.session_state.user_name if 'user_name' in st.session_state else 'N/A'}")
+            st.write(f"**Company:** {st.session_state.company_name if 'company_name' in st.session_state else 'N/A'}")
+        with col_c2:
+            st.write(f"**Location:** {st.session_state.user_location if 'user_location' in st.session_state else 'N/A'}")
+            st.write(f"**Country:** {st.session_state.user_country if 'user_country' in st.session_state else 'N/A'}")
+
+        st.markdown("---")
+        st.markdown(f"**Selected Plan:** {plan_details['name']}")
+        st.markdown(f"**Amount Due:** R{plan_details['price']}")
+        
+        col_pay, _ = st.columns([1, 2])
+        with col_pay:
+            paypal_link = f"https://www.paypal.com/paypalme/dunduonline/{plan_details['price']}"
+            st.link_button("💳 Proceed to PayPal Payment", paypal_link, type="primary", use_container_width=True)
+        
+        st.caption("Note: clicking the button above will redirect you to PayPal to complete the transaction.")
 
 # Upload data page
 
@@ -2125,6 +2197,20 @@ def render_process():
                         f" Auto-ML complete! Best model: {auto_ml_results['best_model']} (R² Score: {auto_ml_results['best_score']:.4f})")
             except Exception as e:
                 st.warning(f"Auto-ML evaluation skipped: {str(e)}")
+
+            # Log operation to database
+            if hasattr(st.session_state, 'db_manager') and st.session_state.current_data is not None:
+                user_context = {
+                    'email': st.session_state.user_email,
+                    'name': st.session_state.user_name,
+                    'company': st.session_state.company_name,
+                    'location': st.session_state.user_location,
+                    'country': st.session_state.user_country
+                }
+                # Log the basic transformation
+                # Note: dataset_id is needed, if not saved yet, we might log it after saving
+                # or just use a placeholder if we want to log current session activity
+                pass
 
             # Show processing log
             st.divider()
@@ -2337,6 +2423,10 @@ def render_database():
                 ),
                 "processing_log": st.session_state.data_processor.get_processing_log(),
                 "user_email": st.session_state.user_email,
+                "user_name": st.session_state.user_name,
+                "company_name": st.session_state.company_name,
+                "user_location": st.session_state.user_location,
+                "user_country": st.session_state.user_country,
                 "tags": tags,
             }
 
@@ -2350,6 +2440,20 @@ def render_database():
                         <span class="icon-animated"> </span> Dataset saved with ID: {dataset_id}
                     </div>
                 """, unsafe_allow_html=True)
+                
+                # Log this save operation
+                user_context = {
+                    'email': st.session_state.user_email,
+                    'name': st.session_state.user_name,
+                    'company': st.session_state.company_name,
+                    'location': st.session_state.user_location,
+                    'country': st.session_state.user_country
+                }
+                st.session_state.db_manager.log_processing_operation(
+                    dataset_id, "SAVE_TO_DB",
+                    {"name": dataset_name, "tags": tags},
+                    user_context
+                )
             else:
                 st.markdown("""
                     <div class="notification-error" style="animation: slideInRight 0.5s ease-out;">
@@ -2377,58 +2481,52 @@ def render_database():
 
     if datasets:
         st.markdown(f"Found {len(datasets)} dataset(s)")
-
-        for dataset in datasets:
-            with st.expander(f" {dataset['name']} (ID: {dataset['id']})"):
+        for ds in datasets:
+            with st.expander(f"{ds['name']} (ID: {ds['id']})"):
                 col1, col2, col3 = st.columns(3)
-
                 with col1:
-                    st.write(f"**Rows:** {dataset['row_count']:,}")
-                    st.write(f"**Columns:** {dataset['column_count']}")
-
+                    st.write(f"**Editor:** {ds.get('user_name') or ds['user_email'] or 'Unknown'}")
+                    if ds.get('company_name'):
+                        st.write(f"**Company:** {ds['company_name']}")
+                    st.write(f"**Description:** {ds.get('description') or 'No description'}")
                 with col2:
-                    st.write(f"**Type:** {dataset['file_type']}")
-                # st.write(f"**Size:** {dataset['file_size'] / 1024:.1f} KB")
-
+                    st.write(f"**Location:** {ds.get('user_location') or 'N/A'}, {ds.get('user_country') or ''}")
+                    st.write(f"**Date:** {ds['upload_date']}")
+                    if ds.get('tags'):
+                        st.write(f"**Tags:** {', '.join(ds['tags'])}")
                 with col3:
-                    st.write(f"**Uploaded:** {dataset['upload_date']}")
-                    st.write(f"**User:** {dataset['user_email']}")
-
-                if dataset["description"]:
-                    st.write(f"**Description:** {dataset['description']}")
-
-                if dataset["tags"]:
-                    st.write(f"**Tags:** {', '.join(dataset['tags'])}")
-
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    if st.button(f" Load", key=f"load_{dataset['id']}"):
-                        loaded_df = st.session_state.db_manager.load_dataset(
-                            dataset["id"]
-                        )
+                    st.write(f"**Rows:** {ds['row_count']} | **Cols:** {ds['column_count']}")
+                    st.write(f"**Type:** {ds.get('file_type') or 'N/A'}")
+                
+                st.divider()
+                # Management buttons
+                m_col1, m_col2, m_col3 = st.columns(3)
+                with m_col1:
+                    if st.button(f" Load", key=f"load_ds_{ds['id']}"):
+                        loaded_df = st.session_state.db_manager.load_dataset(ds['id'])
                         if loaded_df is not None:
                             st.session_state.current_data = loaded_df
-                            st.success(
-                                " Dataset loaded successfully!")
+                            st.success(f"Dataset {ds['id']} loaded!")
                             st.rerun()
-
-                with col2:
-                    if st.button(f" View Details", key=f"details_{dataset['id']}"):
-                        metadata = st.session_state.db_manager.get_dataset_metadata(
-                            dataset["id"]
-                        )
+                with m_col2:
+                    if st.button(f" View Details", key=f"details_ds_{ds['id']}"):
+                        metadata = st.session_state.db_manager.get_dataset_metadata(ds['id'])
                         if metadata:
                             st.json(metadata)
-
-                with col3:
-                    if st.button(f" Delete", key=f"delete_{dataset['id']}"):
-                        if st.session_state.db_manager.delete_dataset(dataset["id"]):
-                            st.success(
-                                " Dataset deleted successfully!")
+                with m_col3:
+                    if st.button(f" Delete", key=f"delete_ds_{ds['id']}"):
+                        if st.session_state.db_manager.delete_dataset(ds['id']):
+                            st.success(f"Dataset {ds['id']} deleted!")
                             st.rerun()
-                        else:
-                            st.error(
-                                " Failed to delete dataset")
+                
+                # Show history
+                if st.checkbox("Show Edit History", key=f"hist_{ds['id']}"):
+                    history = st.session_state.db_manager.get_processing_history(ds['id'])
+                    if history:
+                        for entry in history:
+                            st.write(f"- {entry['timestamp']}: **{entry['operation']}** by {entry['user_name'] or entry['user_email']}")
+                    else:
+                        st.write("No history available.")
     else:
         st.info("No datasets found. Upload and save some data first!")
 
@@ -3292,7 +3390,6 @@ def render_machine_learning():
             
         with sub_tab2:
             render_autoencoder_component()
-
 
 
 def main():
