@@ -2717,7 +2717,8 @@ def render_feature_engineering():
 
                     scaled_data = scaler.fit_transform(df[cols_to_scale])
                     for i, col in enumerate(cols_to_scale):
-                        df[f"{col}_scaled"] = scaled_data[:, i]
+                        sanitized_name = st.session_state.data_processor.sanitize_column_name(f"{col}_scaled")
+                        df[sanitized_name] = scaled_data[:, i]
 
                     st.session_state.feature_engineered_data = df
                     st.success(
@@ -2750,8 +2751,10 @@ def render_feature_engineering():
                         degree=degree, include_bias=False, interaction_only=include_interaction)
                     poly_data = poly.fit_transform(df[poly_cols])
                     feature_names = poly.get_feature_names_out(poly_cols)
+                    # Sanitize feature names
+                    sanitized_feature_names = [st.session_state.data_processor.sanitize_column_name(name) for name in feature_names]
 
-                    poly_df = pd.DataFrame(poly_data, columns=feature_names)
+                    poly_df = pd.DataFrame(poly_data, columns=sanitized_feature_names)
                     st.success(
                         f" Generated {len(feature_names)} polynomial features!")
                     st.dataframe(poly_df.head())
@@ -2779,11 +2782,14 @@ def render_feature_engineering():
                     if encoding_method == "Label Encoding":
                         le = LabelEncoder()
                         for col in cols_to_encode:
-                            df[f"{col}_encoded"] = le.fit_transform(
+                            sanitized_name = st.session_state.data_processor.sanitize_column_name(f"{col}_encoded")
+                            df[sanitized_name] = le.fit_transform(
                                 df[col].astype(str))
                     elif encoding_method == "One-Hot Encoding":
                         encoded_df = pd.get_dummies(
                             df[cols_to_encode], prefix=cols_to_encode)
+                        # Sanitize one-hot encoded column names
+                        encoded_df.columns = [st.session_state.data_processor.sanitize_column_name(col) for col in encoded_df.columns]
                         df = pd.concat([df, encoded_df], axis=1)
 
                     st.session_state.feature_engineered_data = df

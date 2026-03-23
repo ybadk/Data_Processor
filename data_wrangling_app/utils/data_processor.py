@@ -201,6 +201,48 @@ class DataProcessor:
         except Exception as e:
             raise Exception(f"Failed to load DOCX: {str(e)}")
 
+    @staticmethod
+    def sanitize_column_name(name: str) -> str:
+        """
+        Sanitize a single column name to prevent runtime errors in ML models.
+        Replaces spaces and special characters with underscores.
+        """
+        if not isinstance(name, str):
+            name = str(name)
+            
+        # Replace common problematic characters with underscore
+        # Characters like [, ], <, >, ,, space, (, ), $, %, ^, &, *, /, \
+        sanitized = re.sub(r'[ \[\]<>, \(\)\$\%\^\&\*\/\\]+', '_', name)
+        
+        # Remove leading/trailing underscores
+        sanitized = sanitized.strip('_')
+        
+        # Ensure it doesn't start with a number (XGBoost/others might prefer alpha start)
+        if sanitized and sanitized[0].isdigit():
+            sanitized = 'col_' + sanitized
+            
+        # Fallback for empty names
+        if not sanitized:
+            sanitized = "unnamed_column"
+            
+        return sanitized
+
+    def sanitize_dataframe_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply sanitization to all columns of a DataFrame"""
+        new_cols = []
+        for col in df.columns:
+            new_name = self.sanitize_column_name(col)
+            # Handle duplicates after sanitization
+            count = 1
+            temp_name = new_name
+            while temp_name in new_cols:
+                temp_name = f"{new_name}_{count}"
+                count += 1
+            new_cols.append(temp_name)
+            
+        df.columns = new_cols
+        return df
+
     async def clean_data(self, df: pd.DataFrame, options: Dict[str, Any]) -> pd.DataFrame:
         """Clean data based on user-selected options using optimized patterns"""
         cleaned_df = df.copy()
@@ -209,6 +251,11 @@ class DataProcessor:
         is_num = np.number
         
         try:
+            # Apply column sanitization if requested or by default for processed data
+            if options.get('sanitize_headers', True):
+                cleaned_df = self.sanitize_dataframe_columns(cleaned_df)
+                self._log_action("Sanitized column headers")
+
             if options.get('remove_duplicates', False):
                 initial_rows = len(cleaned_df)
                 cleaned_df = cleaned_df.drop_duplicates()
