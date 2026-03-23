@@ -21,6 +21,7 @@ from textblob import TextBlob
 import re
 from datetime import datetime
 import logging
+import asyncio
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -200,10 +201,13 @@ class DataProcessor:
         except Exception as e:
             raise Exception(f"Failed to load DOCX: {str(e)}")
 
-    def clean_data(self, df: pd.DataFrame, options: Dict[str, Any]) -> pd.DataFrame:
-        """Clean data based on user-selected options"""
+    async def clean_data(self, df: pd.DataFrame, options: Dict[str, Any]) -> pd.DataFrame:
+        """Clean data based on user-selected options using optimized patterns"""
         cleaned_df = df.copy()
-
+        
+        # FasterPython: Bind frequently used methods and types to locals
+        is_num = np.number
+        
         try:
             if options.get('remove_duplicates', False):
                 initial_rows = len(cleaned_df)
@@ -217,31 +221,29 @@ class DataProcessor:
                     cleaned_df = cleaned_df.dropna()
                     self._log_action("Dropped rows with missing values")
                 elif missing_strategy == 'fill_mean':
-                    numeric_cols = cleaned_df.select_dtypes(
-                        include=[np.number]).columns
+                    numeric_cols = cleaned_df.select_dtypes(include=[is_num]).columns
                     cleaned_df[numeric_cols] = cleaned_df[numeric_cols].fillna(
                         cleaned_df[numeric_cols].mean())
                     self._log_action("Filled missing numeric values with mean")
                 elif missing_strategy == 'fill_mode':
                     for col in cleaned_df.columns:
-                        cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mode(
-                        ).iloc[0] if not cleaned_df[col].mode().empty else 'Unknown')
+                        mode_res = cleaned_df[col].mode()
+                        cleaned_df[col] = cleaned_df[col].fillna(mode_res.iloc[0] if not mode_res.empty else 'Unknown')
                     self._log_action("Filled missing values with mode")
 
             if options.get('standardize_text', False):
-                text_cols = cleaned_df.select_dtypes(
-                    include=['object']).columns
+                text_cols = cleaned_df.select_dtypes(include=['object']).columns
                 for col in text_cols:
-                    cleaned_df[col] = cleaned_df[col].astype(
-                        str).str.strip().str.lower()
+                    cleaned_df[col] = cleaned_df[col].astype(str).str.strip().str.lower()
                 self._log_action("Standardized text columns")
 
             if options.get('remove_outliers', False):
-                numeric_cols = cleaned_df.select_dtypes(
-                    include=[np.number]).columns
+                numeric_cols = cleaned_df.select_dtypes(include=[is_num]).columns
+                # FasterPython: bind quantile to local for performance in column loop
                 for col in numeric_cols:
-                    Q1 = cleaned_df[col].quantile(0.25)
-                    Q3 = cleaned_df[col].quantile(0.75)
+                    q_fn = cleaned_df[col].quantile
+                    Q1 = q_fn(0.25)
+                    Q3 = q_fn(0.75)
                     IQR = Q3 - Q1
                     lower_bound = Q1 - 1.5 * IQR
                     upper_bound = Q3 + 1.5 * IQR
@@ -249,6 +251,8 @@ class DataProcessor:
                         cleaned_df[col] <= upper_bound)]
                 self._log_action("Removed outliers using IQR method")
 
+            # Yield control periodically for large datasets
+            await asyncio.sleep(0)
             self.processed_data = cleaned_df
             return cleaned_df
 

@@ -22,6 +22,9 @@ import pandas as pd
 import numpy as np
 import pickle
 import os
+import json
+import asyncio
+from datetime import datetime
 from typing import Dict, Any, Tuple, List
 import logging
 import warnings
@@ -56,36 +59,44 @@ class NeuralNetworkWrapper:
         input_vector = np.array(input_vector).reshape(-1, 1)
         target_vector = np.array(target_vector).reshape(-1, 1)
         
+        # FasterPython: bind activation_function to local to avoid attribute lookup in loop
+        af = activation_function
+        weights = self.weights
+        
         # Forward pass - store activations
         activations = [input_vector]
         current_input = input_vector
-        for w in self.weights:
-            current_input = activation_function(w @ current_input)
+        for w in weights:
+            current_input = af(w @ current_input)
             activations.append(current_input)
             
         # Backward pass
         output_vector = activations[-1]
         error = target_vector - output_vector
         
-        for i in reversed(range(len(self.weights))):
-            # Calculate gradient for current layer
-            # delta = error * sigmoid_derivative(activations[i+1])
-            # activations[i+1] * (1.0 - activations[i+1]) is derivative of sigmoid
-            delta = error * activations[i+1] * (1.0 - activations[i+1])
+        for i in reversed(range(len(weights))):
+            act_next = activations[i+1]
+            act_curr = activations[i]
+            # FasterPython: use local variables for gradients
+            delta = error * act_next * (1.0 - act_next)
             
             # Update weights
-            self.weights[i] += self.learning_rate * (delta @ activations[i].T)
+            weights[i] += self.learning_rate * (delta @ act_curr.T)
             
             # Propagate error back to previous layer
-            error = self.weights[i].T @ error
+            error = weights[i].T @ error
 
     def run(self, input_vector):
+        # FasterPython: bind activation_function to local
+        af = activation_function
         current_input = np.array(input_vector).reshape(-1, 1)
         for w in self.weights:
-            current_input = activation_function(w @ current_input)
+            current_input = af(w @ current_input)
         return current_input
 
     def fit_dataset(self, X, y, epochs=10):
+        # FasterPython: bind train method to local
+        train_fn = self.train
         if len(y.shape) == 1:
             num_classes = self.output_nodes
             y_one_hot = np.zeros((y.size, num_classes))
@@ -94,12 +105,14 @@ class NeuralNetworkWrapper:
             
         for epoch in range(epochs):
             for i in range(len(X)):
-                self.train(X[i], y[i])
+                train_fn(X[i], y[i])
 
     def predict_classes(self, X):
+        # FasterPython: bind method and np to local
+        run_fn = self.run
         predictions = []
         for i in range(len(X)):
-            res = self.run(X[i])
+            res = run_fn(X[i])
             predictions.append(res.argmax())
         return np.array(predictions)
 
@@ -202,15 +215,16 @@ class MLIntegration:
 
         return results
 
-    def train_xgboost_model(self, df: pd.DataFrame, target_col: str,
-                            feature_cols: List[str], task_type: str = 'regression',
-                            params: Dict = None) -> Dict[str, Any]:
+    async def train_xgboost_model(self, df: pd.DataFrame, target_col: str,
+                                  feature_cols: List[str], task_type: str = 'regression',
+                                  params: Dict = None) -> Dict[str, Any]:
         """
-        Train XGBoost model with feature engineering integration
+        Train XGBoost model with versioning (Model Lake)
         """
         if not XGBOOST_AVAILABLE:
             return {'error': 'XGBoost not available'}
 
+        # FasterPython: bind filling to local
         X = df[feature_cols].fillna(0)
         y = df[target_col].fillna(0)
 
@@ -235,13 +249,12 @@ class MLIntegration:
             y_pred = model.predict(X_test)
 
             metrics = {
-                'MSE': mean_squared_error(y_test, y_pred),
-                'R2': r2_score(y_test, y_pred),
-                'MAE': mean_absolute_error(y_test, y_pred),
-                'RMSE': np.sqrt(mean_squared_error(y_test, y_pred))
+                'MSE': float(mean_squared_error(y_test, y_pred)),
+                'R2': float(r2_score(y_test, y_pred)),
+                'MAE': float(mean_absolute_error(y_test, y_pred)),
+                'RMSE': float(np.sqrt(mean_squared_error(y_test, y_pred)))
             }
         else:  # classification
-            # Encode labels
             le = LabelEncoder()
             y_train_enc = le.fit_transform(y_train)
             y_test_enc = le.transform(y_test)
@@ -251,30 +264,92 @@ class MLIntegration:
             y_pred_enc = model.predict(X_test)
 
             metrics = {
-                'Accuracy': accuracy_score(y_test_enc, y_pred_enc),
-                'Precision': precision_score(y_test_enc, y_pred_enc, average='weighted', zero_division=0),
-                'Recall': recall_score(y_test_enc, y_pred_enc, average='weighted', zero_division=0),
-                'F1': f1_score(y_test_enc, y_pred_enc, average='weighted', zero_division=0)
+                'Accuracy': float(accuracy_score(y_test_enc, y_pred_enc)),
+                'Precision': float(precision_score(y_test_enc, y_pred_enc, average='weighted', zero_division=0)),
+                'Recall': float(recall_score(y_test_enc, y_pred_enc, average='weighted', zero_division=0)),
+                'F1': float(f1_score(y_test_enc, y_pred_enc, average='weighted', zero_division=0))
             }
             self.encoders['target'] = le
 
+        # Model Lake: Save with unique ID
+        model_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_filename = f'xgboost_{model_id}.pkl'
+        model_path = os.path.join(self.model_dir, model_filename)
+        
         # Save model
-        model_path = os.path.join(self.model_dir, 'xgboost_model.pkl')
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
 
-        # Also save in XGBoost native format
-        model.save_model(os.path.join(self.model_dir, 'xgboost_model.bin'))
+        # Save metadata for the Model Lake
+        metadata = {
+            'model_id': model_id,
+            'task_type': task_type,
+            'target_col': target_col,
+            'feature_cols': feature_cols,
+            'metrics': metrics,
+            'params': {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))},
+            'timestamp': datetime.now().isoformat()
+        }
+        meta_path = model_path.replace('.pkl', '.json')
+        with open(meta_path, 'w') as f:
+            json.dump(metadata, f, indent=4)
 
-        self.models['xgboost'] = model
-        self.metrics['xgboost'] = metrics
+        self.models['latest'] = model
+        self.metrics['latest'] = metrics
 
         return {
-            'model': model,
+            'model_id': model_id,
             'metrics': metrics,
-            'predictions': y_pred,
             'model_path': model_path
         }
+
+    def list_xgboost_models(self) -> List[Dict[str, Any]]:
+        """List all models in the Model Lake"""
+        models_info = []
+        if not os.path.exists(self.model_dir):
+            return []
+            
+        for f in os.listdir(self.model_dir):
+            if f.endswith('.json'):
+                with open(os.path.join(self.model_dir, f), 'r') as meta_file:
+                    models_info.append(json.load(meta_file))
+        
+        # Sort by timestamp descending
+        models_info.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        return models_info
+
+    def load_model_from_lake(self, model_id: str) -> Any:
+        """Load a specific model from the Lake by ID"""
+        model_path = os.path.join(self.model_dir, f'xgboost_{model_id}.pkl')
+        if os.path.exists(model_path):
+            with open(model_path, 'rb') as f:
+                model = pickle.load(f)
+            return model
+        return None
+
+    async def make_predictions_multi(self, df: pd.DataFrame, model_ids: List[str]) -> pd.DataFrame:
+        """
+        Make predictions using multiple selected models from the Lake
+        """
+        result_df = df.copy()
+        X = None
+        
+        # FasterPython: use asyncio for parallel loading (though pickle is synchronous)
+        for mid in model_ids:
+            model = self.load_model_from_lake(mid)
+            if model:
+                # Get features from metadata
+                meta_path = os.path.join(self.model_dir, f'xgboost_{mid}.json')
+                with open(meta_path, 'r') as f:
+                    meta = json.load(f)
+                
+                features = meta.get('feature_cols', [])
+                X_model = df[features].fillna(0)
+                
+                preds = model.predict(X_model)
+                result_df[f'Pred_{mid}'] = preds
+                
+        return result_df
 
     def load_xgboost_model(self, model_path: str = None) -> Any:
         """Load saved XGBoost model"""

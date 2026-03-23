@@ -24,14 +24,17 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, LabelEncoder, PolynomialFeatures
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, classification_report, confusion_matrix, silhouette_score
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, classification_report, confusion_matrix, silhouette_score, f1_score, precision_score
 from sklearn.decomposition import PCA
+from utils.custom_ml_wrapper import CustomModelWrapper, get_available_custom_models
+from utils.ensemble_engine import EnsembleEngine
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
 from sklearn.covariance import EllipticEnvelope
 from scipy.special import expit as activation_function
 from scipy.stats import truncnorm
 
 # App Modules
+import asyncio
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -1070,12 +1073,13 @@ def render_sidebar():
                 "Process Data",
                 "Feature Engineering",
                 "Machine Learning",
+                "Ensemble Workflows",
                 "Dashboard",
                 "Database",
                 "Share Results",
             ],
             icons=["house", "upload", "gear", "sliders",
-                   "robot", "bar-chart", "database", "envelope"],
+                   "robot", "layers", "bar-chart", "database", "envelope"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -2168,9 +2172,9 @@ def render_process():
         with st.spinner("Processing your data..."):
             show_loading_animation("Applying transformations", 5)
 
-            processed_df = st.session_state.data_processor.clean_data(
+            processed_df = asyncio.run(st.session_state.data_processor.clean_data(
                 df, processing_options
-            )
+            ))
             st.session_state.current_data = processed_df
             st.session_state.processing_complete = True
 
@@ -3227,25 +3231,29 @@ def render_machine_learning():
                                              options=[0.01, 0.05,
                                                       0.1, 0.2, 0.3],
                                              value=0.1, key="xgb_lr")
-
-        col_train, col_pred = st.columns(2)
-
-        with col_train:
-            if st.button(" Train XGBoost Model", key="train_xgb"):
-                if xgb_features:
-                    with st.spinner("Training XGBoost model..."):
-                        params = {
-                            'max_depth': max_depth,
-                            'learning_rate': learning_rate,
-                            'n_estimators': n_estimators,
-                            'random_state': 42
-                        }
-
-                        result = st.session_state.ml_integration.train_xgboost_model(
-                            df, xgb_target, xgb_features,
-                            task_type=xgb_task.lower(),
-                            params=params
-                        )
+        
+        xgb_sub_tab1, xgb_sub_tab2 = st.tabs(["🚀 Training & Simple Prediction", "🌊 Model Lake Browser"])
+        
+        with xgb_sub_tab1:
+            col_train, col_pred = st.columns(2)
+            
+            with col_train:
+                if st.button(" Train XGBoost Model", key="train_xgb"):
+                    if xgb_features:
+                        with st.spinner("Training XGBoost model..."):
+                            params = {
+                                'max_depth': max_depth,
+                                'learning_rate': learning_rate,
+                                'n_estimators': n_estimators,
+                                'random_state': 42
+                            }
+    
+                            # Use asyncio.run for the newly async training method
+                            result = asyncio.run(st.session_state.ml_integration.train_xgboost_model(
+                                df, xgb_target, xgb_features,
+                                task_type=xgb_task.lower(),
+                                params=params
+                            ))
 
                         if 'error' not in result:
                             st.markdown("""
@@ -3317,6 +3325,36 @@ def render_machine_learning():
                         else:
                             st.error(
                                 "No trained model found. Please train a model first.")
+
+        with xgb_sub_tab2:
+            st.markdown("### 🌊 XGBoost Model Lake")
+            st.info("Select multiple models from your history to see collective predictions.")
+            
+            models_in_lake = st.session_state.ml_integration.list_xgboost_models()
+            if not models_in_lake:
+                st.warning("The Model Lake is currently empty. Train some models first!")
+            else:
+                # Display as Table
+                models_df = pd.DataFrame(models_in_lake)
+                st.dataframe(models_df[['model_id', 'task_type', 'target_col', 'timestamp']], use_container_width=True)
+                
+                selected_ids = st.multiselect("Select Models for Lake Prediction", 
+                                             [m['model_id'] for m in models_in_lake],
+                                             key="lake_select")
+                
+                if st.button("🚀 Run Lake Predictions", key="run_lake"):
+                    if not selected_ids:
+                        st.error("Please select at least one model.")
+                    else:
+                        with st.spinner("Executing Lake Predictions..."):
+                            lake_preds = asyncio.run(st.session_state.ml_integration.make_predictions_multi(df, selected_ids))
+                            st.session_state.lake_predictions = lake_preds
+                            st.success(f"Generated predictions from {len(selected_ids)} models!")
+                            st.dataframe(lake_preds.head(20), use_container_width=True)
+                            
+                            # Download
+                            csv_lake = lake_preds.to_csv(index=False)
+                            st.download_button("Download Lake Results", csv_lake, "lake_results.csv", "text/csv")
 
     # Linear Models Tab
     with tab6:
@@ -3392,6 +3430,108 @@ def render_machine_learning():
             render_autoencoder_component()
 
 
+# Ensemble Workflows page
+def render_ensemble_workflows():
+    st.markdown("## 🧬 Ensemble Workflows")
+    st.divider()
+
+    if st.session_state.current_data is None:
+        st.warning("🚀 Please upload and process data first!")
+        return
+
+    df = st.session_state.current_data.copy()
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    
+    # Research custom models
+    custom_models = get_available_custom_models()
+    if not custom_models:
+        st.info("No custom models found in machine_learning/ or neural_network/ directories.")
+        return
+
+    st.markdown("### 🛠️ Configure Ensemble")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        target_var = st.selectbox("Target Variable", numeric_cols, key="ens_target")
+        features_var = st.multiselect("Feature Variables", [c for c in numeric_cols if c != target_var], key="ens_features")
+    
+    with col2:
+        ensemble_method = st.selectbox("Ensemble Strategy", ["Voting (Average)", "Stacking (Meta-Learner)"])
+        task_type = st.radio("Task Type", ["Regression", "Classification"], horizontal=True)
+
+    st.markdown("#### 🤖 Select Models for Ensemble")
+    selected_ml = st.multiselect("Machine Learning Models", custom_models.get('machine_learning', []), default=custom_models.get('machine_learning', [])[:2])
+    selected_nn = st.multiselect("Neural Network Models", custom_models.get('neural_network', []), default=custom_models.get('neural_network', [])[:1])
+    
+    all_selected = selected_ml + selected_nn
+    
+    if st.button("🚀 Execute Ensemble Workflow", type="primary"):
+        if not features_var:
+            st.error("Please select at least one feature variable.")
+        elif not all_selected:
+            st.error("Please select at least one model for the ensemble.")
+        else:
+            # Show premium loader
+            show_transitional_loader()
+            
+            with st.spinner("Building and training ensemble..."):
+                try:
+                    # Prepare wrappers
+                    wrappers = []
+                    for model_name in selected_ml:
+                        wrappers.append(CustomModelWrapper(model_name, "machine_learning"))
+                    for model_name in selected_nn:
+                        wrappers.append(CustomModelWrapper(model_name, "neural_network"))
+                    
+                    # Engine
+                    engine = EnsembleEngine(wrappers)
+                    
+                    # Split data
+                    X = df[features_var]
+                    y = df[target_var]
+                    
+                    if task_type == "Classification":
+                        le = LabelEncoder()
+                        y = le.fit_transform(y.fillna('Unknown'))
+                    
+                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                    
+                    # Fit
+                    engine.fit(X_train, y_train)
+                    
+                    # Predict
+                    method = "voting" if "Voting" in ensemble_method else "stacking"
+                    y_pred = engine.predict(X_test, method=method)
+                    
+                    # Metrics
+                    st.success("Ensemble Workflow Completed Successfully!")
+                    
+                    m_col1, m_col2, m_col3 = st.columns(3)
+                    if task_type == "Regression":
+                        mse = mean_squared_error(y_test, y_pred)
+                        r2 = r2_score(y_test, y_pred)
+                        m_col1.metric("Ensemble R²", f"{r2:.4f}")
+                        m_col2.metric("Ensemble MSE", f"{mse:.4f}")
+                        
+                        # Comparison Chart
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', name='Ensemble Predictions'))
+                        fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()], mode='lines', name='Perfect Fit'))
+                        fig.update_layout(title="Ensemble Analysis: Actual vs Predicted", template="plotly_dark")
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        acc = accuracy_score(y_test, y_pred)
+                        m_col1.metric("Ensemble Accuracy", f"{acc:.2%}")
+                        
+                        # Confusion Matrix
+                        cm = confusion_matrix(y_test, y_pred)
+                        fig_cm = px.imshow(cm, text_auto=True, title="Ensemble Confusion Matrix", template="plotly_dark")
+                        st.plotly_chart(fig_cm, use_container_width=True)
+
+                except Exception as e:
+                    st.error(f"Ensemble execution failed: {str(e)}")
+
+
 def main():
     # Load custom CSS
     load_custom_css()
@@ -3424,6 +3564,8 @@ def main():
         render_feature_engineering()
     elif selected_page == "Machine Learning":
         render_machine_learning()
+    elif selected_page == "Ensemble Workflows":
+        render_ensemble_workflows()
     elif selected_page == "Dashboard":
         render_dashboard()
     elif selected_page == "Database":

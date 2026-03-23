@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.preprocessing import StandardScaler
 import streamlit as st
+import asyncio
 
 class PyTorchRNN(nn.Module):
     def __init__(self, model_type='LSTM', n_units=50, input_dim=1):
@@ -61,7 +62,7 @@ class MLFinanceUtils:
         return lag_array
 
     @staticmethod
-    def train_pytorch_model(model, X_train, y_train, epochs=20, lr=0.001, batch_size=32):
+    async def train_pytorch_model(model, X_train, y_train, epochs=20, lr=0.001, batch_size=32):
         criterion = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=lr)
         
@@ -72,13 +73,19 @@ class MLFinanceUtils:
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
         
         model.train()
+        # FasterPython: bind methods to local variables
+        opt_zero_grad = optimizer.zero_grad
+        opt_step = optimizer.step
+        
         for epoch in range(epochs):
             for batch_X, batch_y in dataloader:
-                optimizer.zero_grad()
+                opt_zero_grad()
                 outputs = model(batch_X)
                 loss = criterion(outputs, batch_y)
                 loss.backward()
-                optimizer.step()
+                opt_step()
+            # Allow other tasks to run between epochs
+            await asyncio.sleep(0)
         return model
 
 def render_rnn_component():
@@ -111,7 +118,7 @@ def render_rnn_component():
             y_train, y_test = y[:split], y[split:]
             
             model = PyTorchRNN(model_type, n_units=50, input_dim=X_train.shape[2])
-            MLFinanceUtils.train_pytorch_model(model, X_train, y_train, epochs=10)
+            asyncio.run(MLFinanceUtils.train_pytorch_model(model, X_train, y_train, epochs=10))
             
             model.eval()
             with torch.no_grad():
@@ -157,7 +164,7 @@ def render_autoencoder_component():
             scaled_data = scaler.fit_transform(data)
             
             model = PyTorchAutoencoder(input_dim=len(cols), encoding_dim=encoding_dim)
-            MLFinanceUtils.train_pytorch_model(model, scaled_data, scaled_data, epochs=20, batch_size=16)
+            asyncio.run(MLFinanceUtils.train_pytorch_model(model, scaled_data, scaled_data, epochs=20, batch_size=16))
             
             model.eval()
             with torch.no_grad():
