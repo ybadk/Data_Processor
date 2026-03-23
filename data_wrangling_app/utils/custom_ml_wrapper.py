@@ -10,10 +10,19 @@ class CustomModelWrapper:
     Wraps custom Python scripts from machine_learning/ and neural_network/
     to provide a standardized fit/predict interface.
     """
-    def __init__(self, script_path: str, model_type: str = 'classification'):
-        self.script_path = script_path
+    def __init__(self, model_name: str, category: str = 'machine_learning', model_type: str = 'classification'):
+        self.model_name = model_name
+        self.category = category
         self.model_type = model_type
-        self.module_name = os.path.basename(script_path).replace('.py', '').replace('.', '_')
+        
+        # Resolve absolute script path
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if not model_name.endswith('.py'):
+            self.script_path = os.path.join(base_path, category, f"{model_name}.py")
+        else:
+            self.script_path = os.path.join(base_path, model_name)
+            
+        self.module_name = os.path.basename(self.script_path).replace('.py', '').replace('.', '_')
         self.model_instance = None
         self.is_trained = False
         self._load_module()
@@ -98,16 +107,16 @@ class CustomModelWrapper:
             print(f"Error predicting with model {self.module_name}: {str(e)}")
             return None
 
-def get_available_custom_models(base_dir: str) -> List[Dict[str, str]]:
-    """Scan directories for usable custom model scripts"""
-    models = []
-    for root, dirs, files in os.walk(base_dir):
-        for file in files:
-            if file.endswith('.py') and not file.startswith('__'):
-                path = os.path.join(root, file)
-                models.append({
-                    'name': file.replace('.py', ''),
-                    'path': path,
-                    'category': os.path.basename(root)
-                })
+def get_available_custom_models(base_dir: str = ".") -> Dict[str, List[str]]:
+    """Scan directories for usable custom model scripts, grouped by category."""
+    categories = ['machine_learning', 'neural_network']
+    models = {cat: [] for cat in categories}
+    
+    for cat in categories:
+        target_dir = os.path.join(base_dir, cat)
+        if os.path.exists(target_dir):
+            for file in os.listdir(target_dir):
+                if file.endswith('.py') and not file.startswith('__'):
+                    models[cat].append(file.replace('.py', ''))
+    
     return models

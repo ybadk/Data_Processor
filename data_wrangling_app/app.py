@@ -472,9 +472,11 @@ def init_session_state():
 
 def show_transitional_loader():
     """Displays one of two 7-second loading animations during page transitions."""
+    # Use absolute paths to avoid [Errno 2] issues
+    base_path = os.path.dirname(os.path.abspath(__file__))
     loaders = [
-        "galaxy_cards/Loader/Z4drus_orange-rattlesnake-68.html",
-        "galaxy_cards/Loader/Z4drus_polite-seahorse-77.html"
+        os.path.join(base_path, "galaxy_cards", "Loader", "Z4drus_orange-rattlesnake-68.html"),
+        os.path.join(base_path, "galaxy_cards", "Loader", "Z4drus_polite-seahorse-77.html")
     ]
     
     # Select current loader and toggle index for next time
@@ -3453,7 +3455,7 @@ def render_ensemble_workflows():
     
     # Research custom models
     custom_models = get_available_custom_models()
-    if not custom_models:
+    if not any(custom_models.values()):
         st.info("No custom models found in machine_learning/ or neural_network/ directories.")
         return
 
@@ -3488,9 +3490,9 @@ def render_ensemble_workflows():
                     # Prepare wrappers
                     wrappers = []
                     for model_name in selected_ml:
-                        wrappers.append(CustomModelWrapper(model_name, "machine_learning"))
+                        wrappers.append(CustomModelWrapper(model_name, "machine_learning", model_type=task_type.lower()))
                     for model_name in selected_nn:
-                        wrappers.append(CustomModelWrapper(model_name, "neural_network"))
+                        wrappers.append(CustomModelWrapper(model_name, "neural_network", model_type=task_type.lower()))
                     
                     # Engine
                     engine = EnsembleEngine(wrappers)
