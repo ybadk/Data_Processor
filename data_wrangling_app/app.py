@@ -472,34 +472,49 @@ def init_session_state():
 
 def show_transitional_loader():
     """Displays one of two 7-second loading animations during page transitions."""
-    # Use absolute paths to avoid [Errno 2] issues
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    loaders = [
-        os.path.join(base_path, "galaxy_cards", "Loader", "Z4drus_orange-rattlesnake-68.html"),
-        os.path.join(base_path, "galaxy_cards", "Loader", "Z4drus_polite-seahorse-77.html")
-    ]
+    # Hardcoded animations to avoid external file dependencies and [Errno 2] issues
+    LOADER_1 = """
+<div class="container-jumping">
+  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+</div>
+<style>
+.container-jumping { --uib-size: 80px; --uib-speed: 1.2s; --uib-dot-size: calc(var(--uib-size) * 0.1); position: relative; display: flex; align-items: center; justify-content: flex-start; height: var(--uib-size); width: var(--uib-size); }
+.dot { position: absolute; bottom: 50%; right: 50%; display: flex; align-items: center; justify-content: flex-start; height: var(--uib-dot-size); width: var(--uib-dot-size); animation: jump var(--uib-speed) ease-in-out infinite; will-change: transform; }
+.dot::before { content: ""; height: 100%; width: 100%; background-color: #334dff; border-radius: 50%; }
+@keyframes jump { 0%, 100% { transform: translateY(120%); } 50% { transform: translateY(-120%); } }
+.dot:nth-child(1) { animation-delay: -0.4s; } .dot:nth-child(2) { animation-delay: -0.3s; }
+</style>
+"""
+    LOADER_2 = """
+<div class="container-orbit">
+  <div class="slice"></div><div class="slice"></div><div class="slice"></div>
+  <div class="slice"></div><div class="slice"></div><div class="slice"></div>
+</div>
+<style>
+.container-orbit { --uib-size: 80px; --uib-speed: 2.5s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--uib-size); width: var(--uib-size); }
+.slice { position: relative; height: calc(var(--uib-size) / 6); width: 100%; }
+.slice::before, .slice::after { content: ""; position: absolute; top: 0; left: 45%; height: 100%; width: 15%; border-radius: 50%; background-color: #334dff; animation: orbit var(--uib-speed) linear infinite; }
+@keyframes orbit { 0% { transform: translateX(20px) scale(0.7); opacity: 0.6; } 50% { transform: translateX(-20px) scale(0.7); opacity: 0.6; } 75% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(20px) scale(0.7); opacity: 0.6; } }
+</style>
+"""
+    loaders = [LOADER_1, LOADER_2]
     
-    # Select current loader and toggle index for next time
-    idx = st.session_state.loader_index
-    loader_path = loaders[idx]
+    # Select current loader and toggle index
+    idx = st.session_state.get('loader_index', 0)
+    loader_html = loaders[idx]
     st.session_state.loader_index = (idx + 1) % len(loaders)
     
-    try:
-        with open(loader_path, "r", encoding="utf-8") as f:
-            loader_html = f.read().strip()
-        
-        placeholder = st.empty()
-        with placeholder.container():
-            # Centered loader container styling
-            st.markdown(
-                f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>',
-                unsafe_allow_html=True
-            )
-            time.sleep(7)
-        placeholder.empty()
-    except Exception as e:
-        st.error(f"Error loading animation: {e}")
-        time.sleep(2)
+    placeholder = st.empty()
+    with placeholder.container():
+        st.markdown(
+            f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>',
+            unsafe_allow_html=True
+        )
+        time.sleep(7)
+    placeholder.empty()
 
 # Loading animation
 
