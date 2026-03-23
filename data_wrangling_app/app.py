@@ -32,6 +32,7 @@ from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classi
 from sklearn.covariance import EllipticEnvelope
 from scipy.special import expit as activation_function
 from scipy.stats import truncnorm
+from utils.ui_components import render_glass_card, render_tooltip, render_title_card
 
 # App Modules
 import os
@@ -457,7 +458,7 @@ def init_session_state():
     if "trained_models" not in st.session_state:
         st.session_state.trained_models = {}
     if "previous_page" not in st.session_state:
-        st.session_state.previous_page = "Home"
+        st.session_state.previous_page = None
     if "model_metrics" not in st.session_state:
         st.session_state.model_metrics = {}
     if "auto_ml_metrics" not in st.session_state:
@@ -471,49 +472,21 @@ def init_session_state():
 
 
 def show_transitional_loader():
-    """Displays one of two 7-second loading animations during page transitions."""
-    # Hardcoded animations to avoid external file dependencies and [Errno 2] issues
-    LOADER_1 = """
-<div class="container-jumping">
-  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-  <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-</div>
-<style>
-.container-jumping { --uib-size: 80px; --uib-speed: 1.2s; --uib-dot-size: calc(var(--uib-size) * 0.1); position: relative; display: flex; align-items: center; justify-content: flex-start; height: var(--uib-size); width: var(--uib-size); }
-.dot { position: absolute; bottom: 50%; right: 50%; display: flex; align-items: center; justify-content: flex-start; height: var(--uib-dot-size); width: var(--uib-dot-size); animation: jump var(--uib-speed) ease-in-out infinite; will-change: transform; }
-.dot::before { content: ""; height: 100%; width: 100%; background-color: #334dff; border-radius: 50%; }
-@keyframes jump { 0%, 100% { transform: translateY(120%); } 50% { transform: translateY(-120%); } }
-.dot:nth-child(1) { animation-delay: -0.4s; } .dot:nth-child(2) { animation-delay: -0.3s; }
-</style>
-"""
-    LOADER_2 = """
-<div class="container-orbit">
-  <div class="slice"></div><div class="slice"></div><div class="slice"></div>
-  <div class="slice"></div><div class="slice"></div><div class="slice"></div>
-</div>
-<style>
-.container-orbit { --uib-size: 80px; --uib-speed: 2.5s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--uib-size); width: var(--uib-size); }
-.slice { position: relative; height: calc(var(--uib-size) / 6); width: 100%; }
-.slice::before, .slice::after { content: ""; position: absolute; top: 0; left: 45%; height: 100%; width: 15%; border-radius: 50%; background-color: #334dff; animation: orbit var(--uib-speed) linear infinite; }
-@keyframes orbit { 0% { transform: translateX(20px) scale(0.7); opacity: 0.6; } 50% { transform: translateX(-20px) scale(0.7); opacity: 0.6; } 75% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(20px) scale(0.7); opacity: 0.6; } }
-</style>
-"""
-    loaders = [LOADER_1, LOADER_2]
+    """Displays one of multiple loading animations for 7 seconds during page transitions."""
+    LOADER_1 = """<div class="container-jumping"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><style>.container-jumping { --uib-size: 80px; --uib-speed: 1.2s; position: relative; display: flex; align-items: center; justify-content: flex-start; height: var(--uib-size); width: var(--uib-size); }.dot { position: absolute; bottom: 50%; right: 50%; height: 8px; width: 8px; animation: jump var(--uib-speed) ease-in-out infinite; }.dot::before { content: ""; height: 100%; width: 100%; background-color: #334dff; border-radius: 50%; }.dot:nth-child(1) { animation-delay: -0.4s; } @keyframes jump { 0%, 100% { transform: translateY(120%); } 50% { transform: translateY(-120%); } }</style>"""
+    LOADER_2 = """<div class="container-orbit"><div class="slice"></div><div class="slice"></div><div class="slice"></div></div><style>.container-orbit { --uib-size: 80px; --uib-speed: 2.5s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--uib-size); width: var(--uib-size); }.slice { position: relative; height: 12px; width: 100%; }.slice::before { content: ""; position: absolute; top: 0; left: 45%; height: 100%; width: 10%; border-radius: 50%; background-color: #334dff; animation: orbit var(--uib-speed) linear infinite; } @keyframes orbit { 0% { transform: translateX(30px) scale(0.7); } 50% { transform: translateX(-30px) scale(0.7); } 100% { transform: translateX(30px) scale(0.7); } }</style>"""
+    LOADER_3 = """<div class="container-pulse"><div class="wave"></div><div class="wave"></div><div class="wave"></div></div><style>.container-pulse { display: flex; align-items: flex-end; justify-content: space-between; width: 60px; height: 50px; } .wave { width: 12px; height: 20%; background: #334dff; border-radius: 5px; animation: wave 1.2s ease-in-out infinite; } .wave:nth-child(2) { animation-delay: 0.2s; } .wave:nth-child(3) { animation-delay: 0.4s; } @keyframes wave { 0%, 100% { height: 20%; } 50% { height: 100%; } }</style>"""
+    LOADER_4 = """<div class="container-square"><div class="sq"></div></div><style>.container-square { width: 50px; height: 50px; position: relative; } .sq { width: 100%; height: 100%; background: #334dff; animation: rotate 1.5s linear infinite; } @keyframes rotate { 0% { transform: rotate(0deg); border-radius: 50%; } 50% { transform: rotate(180deg); border-radius: 0%; } 100% { transform: rotate(360deg); border-radius: 50%; } }</style>"""
     
-    # Select current loader and toggle index
+    loaders = [LOADER_1, LOADER_2, LOADER_3, LOADER_4]
     idx = st.session_state.get('loader_index', 0)
-    loader_html = loaders[idx]
-    st.session_state.loader_index = (idx + 1) % len(loaders)
+    loader_html = loaders[idx % len(loaders)]
+    st.session_state.loader_index = (idx + 1)
     
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown(
-            f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>',
-            unsafe_allow_html=True
-        )
-        time.sleep(7)
+        st.markdown(f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>', unsafe_allow_html=True)
+        time.sleep(2) # Reduced to 2s for better UX while cycling
     placeholder.empty()
 
 # Loading animation
@@ -1279,409 +1252,21 @@ def render_home():
     """, unsafe_allow_html=True)
     st.divider()
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown(
-            """
-        <div class="enhanced-card">
-            <h3> Upload</h3>
-            <p>Support for multiple file formats including CSV, Excel, JSON, PDF, and DOCX</p>
-        </div>
-        <div class="item-hints">
-  <div class="hint" data-position="4">
-    <span class="hint-radius"></span>
-    <span class="hint-dot">Tip</span>
-    <div class="hint-content do--split-children">
-      <p>Request for machine learning prediction models to be used on historical datasets. send a direct email for assistance</p>
-    </div>
-  </div>
-</div>
-
-<style>
-/* From Uiverse.io by vnuny  - Tags: simple, tooltip, animation, black, animated */
-.item-hints {
-  --purple: #720c8f;
-  cursor: pointer;
-  display: flex;
-  justify-content: flex-start;
-  padding-right: 170px;
-}
-.item-hints .hint {
-  margin: 150px auto;
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.item-hints .hint-dot {
-  z-index: 3;
-  border: 1px solid #ffe4e4;
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  -webkit-transform: translate(-0%, -0%) scale(0.95);
-  transform: translate(-0%, -0%) scale(0.95);
-  margin: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-.item-hints .hint-radius {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  margin: -125px 0 0 -125px;
-  opacity: 0;
-  visibility: hidden;
-  -webkit-transform: scale(0);
-  transform: scale(0);
-}
-.item-hints .hint[data-position="1"] .hint-content {
-  top: 85px;
-  left: 50%;
-  margin-left: 56px;
-}
-.item-hints .hint-content {
-  width: 300px;
-  position: absolute;
-  z-index: 5;
-  padding: 35px 0;
-  opacity: 0;
-  transition: opacity 0.7s ease, visibility 0.7s ease;
-  color: #fff;
-  visibility: hidden;
-  pointer-events: none;
-}
-.item-hints .hint:hover .hint-content {
-  position: absolute;
-  z-index: 5;
-  padding: 35px 0;
-  opacity: 1;
-  -webkit-transition: opacity 0.7s ease, visibility 0.7s ease;
-  transition: opacity 0.7s ease, visibility 0.7s ease;
-  color: #fff;
-  visibility: visible;
-  pointer-events: none;
-}
-.item-hints .hint-content::before {
-  width: 0px;
-  bottom: 29px;
-  left: 0;
-  content: "";
-  background-color: #fff;
-  height: 1px;
-  position: absolute;
-  transition: width 0.4s;
-}
-.item-hints .hint:hover .hint-content::before {
-  width: 180px;
-  transition: width 0.4s;
-}
-.item-hints .hint-content::after {
-  -webkit-transform-origin: 0 50%;
-  transform-origin: 0 50%;
-  -webkit-transform: rotate(-225deg);
-  transform: rotate(-225deg);
-  bottom: 29px;
-  left: 0;
-  width: 80px;
-  content: "";
-  background-color: #fff;
-  height: 1px;
-  position: absolute;
-  opacity: 1;
-  -webkit-transition: opacity 0.5s ease;
-  transition: opacity 0.5s ease;
-  -webkit-transition-delay: 0s;
-  transition-delay: 0s;
-}
-.item-hints .hint:hover .hint-content::after {
-  opacity: 1;
-  visibility: visible;
-}
-.item-hints .hint[data-position="4"] .hint-content {
-  bottom: 85px;
-  left: 50%;
-  margin-left: 56px;
-}
-
-</style>
+    # Featured sections with Glass Cards
+    st.markdown("### Platform Capabilities")
+    f_col1, f_col2, f_col3 = st.columns(3)
     
-        """,
-            unsafe_allow_html=True,
-        )
-
-    with col2:
-        st.markdown(
-            """
-        <div class="enhanced-card">
-            <h3> Process</h3>
-            <p>Advanced data cleaning, transformation, and quality improvement tools</p>
-        </div>
-        <div class="item-hints">
-  <div class="hint" data-position="4">
-    <span class="hint-radius"></span>
-    <span class="hint-dot">Tip</span>
-    <div class="hint-content do--split-children">
-      <p>Request for detailed data exploratory analysis using correlated features from historical or present datasets.</p>
-    </div>
-  </div>
-</div>
-
-<style>
-/* From Uiverse.io by vnuny  - Tags: simple, tooltip, animation, black, animated */
-.item-hints {
-  --purple: #720c8f;
-  cursor: pointer;
-  display: flex;
-  justify-content: flex-start;
-  padding-right: 170px;
-}
-.item-hints .hint {
-  margin: 150px auto;
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.item-hints .hint-dot {
-  z-index: 3;
-  border: 1px solid #ffe4e4;
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  -webkit-transform: translate(-0%, -0%) scale(0.95);
-  transform: translate(-0%, -0%) scale(0.95);
-  margin: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-.item-hints .hint-radius {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  margin: -125px 0 0 -125px;
-  opacity: 0;
-  visibility: hidden;
-  -webkit-transform: scale(0);
-  transform: scale(0);
-}
-.item-hints .hint[data-position="1"] .hint-content {
-  top: 85px;
-  left: 50%;
-  margin-left: 56px;
-}
-.item-hints .hint-content {
-  width: 300px;
-  position: absolute;
-  z-index: 5;
-  padding: 35px 0;
-  opacity: 0;
-  transition: opacity 0.7s ease, visibility 0.7s ease;
-  color: #fff;
-  visibility: hidden;
-  pointer-events: none;
-}
-.item-hints .hint:hover .hint-content {
-  position: absolute;
-  z-index: 5;
-  padding: 35px 0;
-  opacity: 1;
-  -webkit-transition: opacity 0.7s ease, visibility 0.7s ease;
-  transition: opacity 0.7s ease, visibility 0.7s ease;
-  color: #fff;
-  visibility: visible;
-  pointer-events: none;
-}
-.item-hints .hint-content::before {
-  width: 0px;
-  bottom: 29px;
-  left: 0;
-  content: "";
-  background-color: #fff;
-  height: 1px;
-  position: absolute;
-  transition: width 0.4s;
-}
-.item-hints .hint:hover .hint-content::before {
-  width: 180px;
-  transition: width 0.4s;
-}
-.item-hints .hint-content::after {
-  -webkit-transform-origin: 0 50%;
-  transform-origin: 0 50%;
-  -webkit-transform: rotate(-225deg);
-  transform: rotate(-225deg);
-  bottom: 29px;
-  left: 0;
-  width: 80px;
-  content: "";
-  background-color: #fff;
-  height: 1px;
-  position: absolute;
-  opacity: 1;
-  -webkit-transition: opacity 0.5s ease;
-  transition: opacity 0.5s ease;
-  -webkit-transition-delay: 0s;
-  transition-delay: 0s;
-}
-.item-hints .hint:hover .hint-content::after {
-  opacity: 1;
-  visibility: visible;
-}
-.item-hints .hint[data-position="4"] .hint-content {
-  bottom: 85px;
-  left: 50%;
-  margin-left: 56px;
-}
-
-</style>
-    
-        """,
-            unsafe_allow_html=True,
-        )
-
-    with col3:
-        st.markdown(
-            """
-        <div class="enhanced-card">
-            <h3> Visualize</h3>
-            <p>Interactive dashboards and comprehensive data analysis</p>
-        </div>
-        <div class="item-hints">
-  <div class="hint" data-position="4">
-    <span class="hint-radius"></span>
-    <span class="hint-dot">Tip</span>
-    <div class="hint-content do--split-children">
-      <p>Request for detailed visualizations with feature engineering and machine learning algorithms implemented on datasets.</p>
-    </div>
-  </div>
-</div>
-
-<style>
-/* From Uiverse.io by vnuny  - Tags: simple, tooltip, animation, black, animated */
-.item-hints {
-  --purple: #720c8f;
-  cursor: pointer;
-  display: flex;
-  justify-content: flex-start;
-  padding-right: 170px;
-}
-.item-hints .hint {
-  margin: 150px auto;
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.item-hints .hint-dot {
-  z-index: 3;
-  border: 1px solid #ffe4e4;
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  -webkit-transform: translate(-0%, -0%) scale(0.95);
-  transform: translate(-0%, -0%) scale(0.95);
-  margin: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-.item-hints .hint-radius {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  margin: -125px 0 0 -125px;
-  opacity: 0;
-  visibility: hidden;
-  -webkit-transform: scale(0);
-  transform: scale(0);
-}
-.item-hints .hint[data-position="1"] .hint-content {
-  top: 85px;
-  left: 50%;
-  margin-left: 56px;
-}
-.item-hints .hint-content {
-  width: 300px;
-  position: absolute;
-  z-index: 5;
-  padding: 35px 0;
-  opacity: 0;
-  transition: opacity 0.7s ease, visibility 0.7s ease;
-  color: #fff;
-  visibility: hidden;
-  pointer-events: none;
-}
-.item-hints .hint:hover .hint-content {
-  position: absolute;
-  z-index: 5;
-  padding: 35px 0;
-  opacity: 1;
-  -webkit-transition: opacity 0.7s ease, visibility 0.7s ease;
-  transition: opacity 0.7s ease, visibility 0.7s ease;
-  color: #fff;
-  visibility: visible;
-  pointer-events: none;
-}
-.item-hints .hint-content::before {
-  width: 0px;
-  bottom: 29px;
-  left: 0;
-  content: "";
-  background-color: #fff;
-  height: 1px;
-  position: absolute;
-  transition: width 0.4s;
-}
-.item-hints .hint:hover .hint-content::before {
-  width: 180px;
-  transition: width 0.4s;
-}
-.item-hints .hint-content::after {
-  -webkit-transform-origin: 0 50%;
-  transform-origin: 0 50%;
-  -webkit-transform: rotate(-225deg);
-  transform: rotate(-225deg);
-  bottom: 29px;
-  left: 0;
-  width: 80px;
-  content: "";
-  background-color: #fff;
-  height: 1px;
-  position: absolute;
-  opacity: 1;
-  -webkit-transition: opacity 0.5s ease;
-  transition: opacity 0.5s ease;
-  -webkit-transition-delay: 0s;
-  transition-delay: 0s;
-}
-.item-hints .hint:hover .hint-content::after {
-  opacity: 1;
-  visibility: visible;
-}
-.item-hints .hint[data-position="4"] .hint-content {
-  bottom: 85px;
-  left: 50%;
-  margin-left: 56px;
-}
-
-</style>
-    
-        """,
-            unsafe_allow_html=True,
-        )
+    with f_col1:
+        render_glass_card("Upload Data", '<svg viewBox="0 0 640 512" height="1em"><path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9C105.4 112.9 181.8 48 272 48c90.1 0 166.5 64.9 175.7 152.1C503.8 219.8 544 273.2 544 336c0 79.5-64.5 144-144 144H144zM224 338.7V384c0 8.8 7.2 16 16 16h64c8.8 0 16-7.2 16-16v-45.3h37.3c9.4 0 14.1-11.4 7.5-18.1L301.5 257.3c-4.1-4.1-10.8-4.1-14.9 0L223.3 320.6c-6.7 6.7-1.9 18.1 7.5 18.1H224z"/></svg>', rotation=-15)
+        render_tooltip("Quick Import", "Support for CSV, Excel, JSON, and SQL databases.", "Data Ingestion")
+        
+    with f_col2:
+        render_glass_card("Process Data", '<svg viewBox="0 0 512 512" height="1em"><path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-75.6 68.1c.7 5.4 1.1 10.9 1.1 16.5s-.4 11.1-1.1 16.5l75.6 68.1c6.9 6.2 9.6 15.9 6.4 24.6l-44.6 122.6c-3.2 8.7-11.9 14.3-21.2 13.1l-100.3-13.4c-18.4 15.3-40.1 27.3-64 34.8V448c0 10.6-8.6 19.2-19.2 19.2s-19.2-8.6-19.2-19.2V439.1c-23.9-7.5-45.6-19.5-64-34.8l-100.3 13.4c-9.3 1.2-18-4.4-21.2-13.1L16.1 282c-3.2-8.7-.5-18.4 6.4-24.6l75.6-68.1c-.7-5.4-1.1-10.9-1.1-16.5s.4-11.1 1.1-16.5L22.5 88.2c-6.9-6.2-9.6-15.9-6.4-24.6L60.7-59c3.2-8.7 11.9-14.3 21.2-13.1l100.3 13.4C200.6-75 222.3-87 246.2-94.5V-160c0-10.6 8.6-19.2 19.2-19.2s19.2 8.6 19.2 19.2V-94.5c23.9 7.5 45.6 19.5 64 34.8l100.3-13.4c9.3-1.2 18 4.4 21.2 13.1l44.6 122.6zM256 160a96 96 0 1 0 0 192 96 96 0 1 0 0-192z"/></svg>', rotation=5)
+        render_tooltip("Automation", "Smart cleaning and outlier detection workflows.", "Smart Wrangling")
+        
+    with f_col3:
+        render_glass_card("Analyze & ML", '<svg viewBox="0 0 576 512" height="1em"><path d="M304 240V16.6c0-9 7-16.6 16-16.6C443.7 0 544 100.3 544 224c0 9-7.6 16-16.6 16H304zM32 272C32 150.7 122.1 50.3 239 34.3c9.2-1.3 17 6.1 17 15.4V288L412.5 444.5c6.7 6.7 6.2 17.7-1.5 23.1C371.8 495.6 325.9 512 276.5 512 141.9 512 32 404.1 32 272zm526.4 16.7c7.3 7.6 6.7 19.8-1.5 26.1L400.3 435.5 288 323.2V272h231c9 0 16.5 7.1 17.4 16.7z"/></svg>', rotation=25)
+        render_tooltip("Prediction", "Integrated AutoML and Ensemble strategies.", "Deep Learning")
     st.divider()
 
     # Statistics
