@@ -61,7 +61,5 @@ test_*.py
 
 # Project specific
 project_scope.txt
-*.jpg
-*.png
-*.gif
+
 
