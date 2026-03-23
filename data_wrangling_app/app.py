@@ -34,6 +34,7 @@ from scipy.special import expit as activation_function
 from scipy.stats import truncnorm
 
 # App Modules
+import os
 import asyncio
 import streamlit as st
 import pandas as pd
@@ -1063,7 +1064,9 @@ def render_header():
 
 def render_sidebar():
     with st.sidebar:
-        st.image("image5.jpg", width=300)
+        # Use absolute path relative to the script
+        image_path = os.path.join(os.path.dirname(__file__), "image5.jpg")
+        st.image(image_path, width=300)
 
         selected = option_menu(
             menu_title="Navigation",
