@@ -150,3 +150,67 @@ class BPNN:
         for layer in self.layers:
             x_mat = layer.forward_propagation(x_mat)
         return np.array(x_mat).flatten()
+
+class KNNClassifier:
+    """K-Nearest Neighbors for Classification."""
+    def __init__(self, k=5):
+        self.k = k
+        self.X_train = None
+        self.y_train = None
+
+    def train(self, X, y):
+        self.X_train = X
+        self.y_train = y
+
+    def predict(self, X):
+        predictions = [self._predict_single(x) for x in X]
+        return np.array(predictions)
+
+    def _predict_single(self, x):
+        distances = np.sqrt(((self.X_train - x) ** 2).sum(axis=1))
+        k_indices = np.argsort(distances)[:self.k]
+        k_nearest_labels = [self.y_train[i] for i in k_indices]
+        most_common = np.bincount(k_nearest_labels.astype(int)).argmax()
+        return most_common
+
+class KNNRegressor:
+    """K-Nearest Neighbors for Regression."""
+    def __init__(self, k=5):
+        self.k = k
+        self.X_train = None
+        self.y_train = None
+
+    def train(self, X, y):
+        self.X_train = X
+        self.y_train = y
+
+    def predict(self, X):
+        predictions = [self._predict_single(x) for x in X]
+        return np.array(predictions)
+
+    def _predict_single(self, x):
+        distances = np.sqrt(((self.X_train - x) ** 2).sum(axis=1))
+        k_indices = np.argsort(distances)[:self.k]
+        k_nearest_labels = [self.y_train[i] for i in k_indices]
+        return np.mean(k_nearest_labels)
+
+class PolynomialRegression:
+    """Polynomial Regression using OLS."""
+    def __init__(self, degree=2):
+        self.degree = degree
+        self.weights = None
+
+    def _transform(self, X):
+        if X.ndim == 1: X = X.reshape(-1, 1)
+        X_poly = np.ones((X.shape[0], 1))
+        for d in range(1, self.degree + 1):
+            X_poly = np.hstack((X_poly, X ** d))
+        return X_poly
+
+    def train(self, X, y):
+        X_poly = self._transform(X)
+        self.weights = np.linalg.pinv(X_poly.T @ X_poly) @ X_poly.T @ y
+
+    def predict(self, X):
+        X_poly = self._transform(X)
+        return X_poly @ self.weights

@@ -14,6 +14,14 @@ class EnsembleEngine:
         self.wrappers = [CustomModelWrapper(path, model_type) for path in model_paths]
         self.is_trained = False
 
+    def fit(self, X: np.ndarray, y: np.ndarray, **kwargs):
+        """Alias for train_ensemble to match UI calls"""
+        return self.train_ensemble(X, y, **kwargs)
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Alias for predict_ensemble to match UI calls"""
+        return self.predict_ensemble(X)
+
     def train_ensemble(self, X: np.ndarray, y: np.ndarray, **kwargs):
         """Train all base models in the ensemble"""
         success_count = 0

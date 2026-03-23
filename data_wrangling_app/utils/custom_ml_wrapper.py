@@ -5,7 +5,10 @@ import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-from utils.integrated_models import DecisionTree, LogisticRegression, KMeans, BPNN, DenseLayer, sigmoid
+from utils.integrated_models import (
+    DecisionTree, LogisticRegression, KMeans, BPNN, DenseLayer, sigmoid,
+    KNNClassifier, KNNRegressor, PolynomialRegression
+)
 
 class CustomModelWrapper:
     """
@@ -27,6 +30,13 @@ class CustomModelWrapper:
             self.model_instance = LogisticRegression()
         elif self.model_name == 'KMeans':
             self.model_instance = KMeans(k=3)
+        elif self.model_name == 'KNN':
+            if self.model_type == 'classification':
+                self.model_instance = KNNClassifier(k=5)
+            else:
+                self.model_instance = KNNRegressor(k=5)
+        elif self.model_name == 'PolynomialRegression':
+            self.model_instance = PolynomialRegression(degree=2)
         elif self.model_name == 'BPNN':
             self.model_instance = BPNN()
             # Default layers for BPNN integration
@@ -37,10 +47,10 @@ class CustomModelWrapper:
     def fit(self, X: np.ndarray, y: np.ndarray, **kwargs):
         """Standardized training interface"""
         try:
-            if isinstance(self.model_instance, (DecisionTree, LogisticRegression, KMeans)):
+            if isinstance(self.model_instance, (DecisionTree, LogisticRegression, KMeans, KNNClassifier, KNNRegressor, PolynomialRegression)):
                 if isinstance(self.model_instance, LogisticRegression):
                     self.model_instance.fit(X, y)
-                elif isinstance(self.model_instance, KMeans):
+                elif isinstance(self.model_instance, (KMeans)):
                     self.model_instance.fit(X)
                 else:
                     self.model_instance.train(X, y)
@@ -67,6 +77,6 @@ class CustomModelWrapper:
 def get_available_custom_models(base_dir: str = ".") -> Dict[str, List[str]]:
     """Return a static registry of integrated models."""
     return {
-        'machine_learning': ['DecisionTree', 'LogisticRegression', 'KMeans'],
+        'machine_learning': ['DecisionTree', 'LogisticRegression', 'KMeans', 'KNN', 'PolynomialRegression'],
         'neural_network': ['BPNN']
     }
