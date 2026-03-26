@@ -1,0 +1,28 @@
+{
+    "model_id": "original_20260326_162349",
+    "dataset_name": "original",
+    "task_type": "regression",
+    "target_col": "WORLDCONSUMPTION",
+    "feature_cols": [
+        "ALUMPRICE",
+        "COPPERPRICE",
+        "INVENTORYINDEX"
+    ],
+    "error_metrics": {
+        "mse": 212554.56214943883,
+        "rmse": 461.0364000265476,
+        "mae": 351.5244335937499,
+        "mape": 8.444180508150472,
+        "error_rate": 0.08444180508150473,
+        "passes_test": "True"
+    },
+    "params": {
+        "max_depth": 3,
+        "learning_rate": 0.1,
+        "n_estimators": 100,
+        "random_state": 42
+    },
+    "timestamp": "2026-03-26T16:23:49.268413",
+    "scaler": null,
+    "poly_features": null
+}

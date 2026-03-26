@@ -217,8 +217,219 @@ try:
 except ImportError:
     STATSMODELS_AVAILABLE = False
 
+# LightGBM as fallback
+try:
+    import lightgbm as lgb
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
 
-class ModelErrorTester:
+
+class SimpleAutoencoder:
+    """
+    Simple autoencoder for dimensionality reduction and feature denoising.
+    Encodes data to lower dimensions, improving XGBoost stability.
+    """
+    
+    def __init__(self, input_dim: int, latent_dim: int=None):
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim or max(2, input_dim // 2)
+        self.encoder_weights = None
+        self.decoder_weights = None
+        self.encoder_bias = None
+        self.decoder_bias = None
+    
+    def fit(self, X: np.ndarray, epochs: int=50, learning_rate: float=0.01):
+        """Train autoencoder with gradient descent"""
+        X = np.asarray(X, dtype=np.float64)
+        
+        # Initialize weights
+        self.encoder_weights = np.random.randn(self.input_dim, self.latent_dim) * 0.01
+        self.decoder_weights = np.random.randn(self.latent_dim, self.input_dim) * 0.01
+        self.encoder_bias = np.zeros(self.latent_dim)
+        self.decoder_bias = np.zeros(self.input_dim)
+        
+        for epoch in range(epochs):
+            # Forward pass
+            encoded = np.dot(X, self.encoder_weights) + self.encoder_bias
+            encoded = np.tanh(encoded)  # Activation
+            decoded = np.dot(encoded, self.decoder_weights) + self.decoder_bias
+            
+            # Compute loss
+            loss = np.mean((X - decoded) ** 2)
+            
+            # Backward pass (simplified)
+            d_loss = 2.0 * (decoded - X) / len(X)
+            d_decoder_w = np.dot(encoded.T, d_loss)
+            d_encoded = np.dot(d_loss, self.decoder_weights.T)
+            d_encoded = d_encoded * (1 - encoded ** 2)  # tanh derivative
+            d_encoder_w = np.dot(X.T, d_encoded)
+            
+            # Update weights
+            self.encoder_weights -= learning_rate * d_encoder_w
+            self.decoder_weights -= learning_rate * d_decoder_w
+            self.encoder_bias -= learning_rate * np.sum(d_encoded, axis=0)
+            self.decoder_bias -= learning_rate * np.sum(d_loss, axis=0)
+    
+    def encode(self, X: np.ndarray) -> np.ndarray:
+        """Reduce dimensionality"""
+        X = np.asarray(X, dtype=np.float64)
+        encoded = np.dot(X, self.encoder_weights) + self.encoder_bias
+        return np.tanh(encoded)
+    
+    def decode(self, encoded: np.ndarray) -> np.ndarray:
+        """Reconstruct from latent representation"""
+        return np.dot(encoded, self.decoder_weights) + self.decoder_bias
+
+
+class RobustXGBoostClient:
+    """
+    Robust XGBoost client that bypasses sklearn wrapper issues.
+    Uses xgb.DMatrix directly and implements fallbacks.
+    """
+    
+    def __init__(self):
+        self.model = None
+        self.feature_names = None
+        self.use_autoencoder = False
+        self.autoencoder = None
+    
+    def _prepare_dmatrix(self, X: np.ndarray, y: np.ndarray=None) -> xgb.DMatrix:
+        """
+        Create XGBoost DMatrix safely from pure numpy arrays.
+        Bypasses pandas issues entirely.
+        """
+        # Ensure X and y are numpy float64
+        X = np.asarray(X, dtype=np.float64)
+        if y is not None:
+            y = np.asarray(y, dtype=np.float64)
+        
+        # Ensure data is contiguous in memory
+        if not X.flags['C_CONTIGUOUS']:
+            X = np.ascontiguousarray(X)
+        if y is not None and not y.flags['C_CONTIGUOUS']:
+            y = np.ascontiguousarray(y)
+        
+        # Create DMatrix directly
+        try:
+            dmatrix = xgb.DMatrix(X, label=y)
+            return dmatrix
+        except Exception as e:
+            raise ValueError(f"Failed to create DMatrix: {str(e)}")
+    
+    def fit(self, X: np.ndarray, y: np.ndarray, task_type: str='regression',
+            use_autoencoder: bool=False, autoencoder_dim: int=None, **xgb_params):
+        """
+        Fit XGBoost model with optional autoencoder preprocessing.
+        """
+        try:
+            X = np.asarray(X, dtype=np.float64)
+            y = np.asarray(y, dtype=np.float64)
+            
+            # Apply autoencoder if requested
+            if use_autoencoder:
+                ae_dim = autoencoder_dim or max(2, X.shape[1] // 2)
+                self.autoencoder = SimpleAutoencoder(X.shape[1], latent_dim=ae_dim)
+                self.autoencoder.fit(X, epochs=20)
+                X = self.autoencoder.encode(X)
+                self.use_autoencoder = True
+            
+            # Create DMatrix
+            dtrain = self._prepare_dmatrix(X, y)
+            
+            # Default params
+            if not xgb_params:
+                xgb_params = {
+                    'max_depth': 3,
+                    'learning_rate': 0.1,
+                    'n_estimators': 100,
+                    'random_state': 42
+                }
+            
+            # Set objective based on task
+            if task_type == 'regression':
+                xgb_params['objective'] = 'reg:squarederror'
+            else:
+                xgb_params['objective'] = 'binary:logistic' if len(np.unique(y)) == 2 else 'multi:softmax'
+                xgb_params['num_class'] = len(np.unique(y))
+            
+            # Train using native XGBoost
+            self.model = xgb.train(xgb_params, dtrain, num_boost_round=xgb_params.get('n_estimators', 100))
+            return True
+        
+        except Exception as e:
+            print(f"XGBoost training failed: {str(e)}, attempting fallback to LightGBM...")
+            return self._fallback_lgb(X, y, task_type)
+    
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Make predictions with optional autoencoder decoding."""
+        if self.model is None:
+            raise ValueError("Model not trained yet")
+        
+        X = np.asarray(X, dtype=np.float64)
+        
+        # Apply autoencoder if it was used
+        if self.use_autoencoder and self.autoencoder is not None:
+            X = self.autoencoder.encode(X)
+        
+        # Create DMatrix and predict
+        dtest = self._prepare_dmatrix(X)
+        predictions = self.model.predict(dtest)
+        
+        return predictions
+    
+    def _fallback_lgb(self, X: np.ndarray, y: np.ndarray, task_type: str):
+        """Fallback to LightGBM if XGBoost fails"""
+        if not LIGHTGBM_AVAILABLE:
+            raise ImportError("LightGBM not available as fallback")
+        
+        try:
+            X = np.asarray(X, dtype=np.float64)
+            y = np.asarray(y, dtype=np.float64)
+            
+            if task_type == 'regression':
+                self.model = lgb.LGBMRegressor(n_estimators=100, max_depth=3, learning_rate=0.1)
+            else:
+                self.model = lgb.LGBMClassifier(n_estimators=100, max_depth=3, learning_rate=0.1)
+            
+            self.model.fit(X, y)
+            return True
+        except Exception as e:
+            print(f"LightGBM fallback also failed: {str(e)}")
+            return False
+
+
+class DataPartitioner:
+    """
+    Partitions large datasets into chunks that XGBoost can safely process.
+    Useful for memory-constrained environments or problematic data.
+    """
+    
+    @staticmethod
+    def partition_by_size(X: np.ndarray, y: np.ndarray, chunk_size: int=5000) -> List[Tuple[np.ndarray, np.ndarray]]:
+        """Split data into fixed-size chunks"""
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64)
+        
+        chunks = []
+        for i in range(0, len(X), chunk_size):
+            X_chunk = X[i:i + chunk_size]
+            y_chunk = y[i:i + chunk_size]
+            chunks.append((X_chunk, y_chunk))
+        
+        return chunks
+    
+    @staticmethod
+    def partition_by_dtype(df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        """Separate numeric and categorical data"""
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        categorical_cols = df.select_dtypes(exclude=[np.number]).columns
+        
+        return {
+            'numeric': df[numeric_cols],
+            'categorical': df[categorical_cols]
+        }
+
     """
     Tests model error rates before saving to ensure quality control.
     Ensures error rate is below 10% before allowing model persistence.
@@ -561,53 +772,58 @@ class MLIntegration:
                 if X is None or y is None:
                     return {'error': f'Data sanitization failed for dataset {dataset_name}'}
 
-                # Split data
-                X_train, X_test, y_train, y_test = train_test_split(
-                    X, y, test_size=0.2, random_state=42
-                )
-
-                # CRITICAL: Convert to numpy arrays BEFORE XGBoost to avoid dtype corruption
-                X_train_array = np.asarray(X_train.values, dtype=np.float64, order='C')
-                X_test_array = np.asarray(X_test.values, dtype=np.float64, order='C')
-                y_train_array = np.asarray(y_train.values, dtype=np.float64, order='C')
-                y_test_array = np.asarray(y_test.values, dtype=np.float64, order='C')
+                # Split data - convert to pure numpy immediately
+                split_idx = int(len(X) * 0.8)
+                indices = np.arange(len(X))
+                np.random.shuffle(indices)
                 
-                # Ensure arrays are contiguous and have no issues
-                X_train_array = np.ascontiguousarray(X_train_array)
-                X_test_array = np.ascontiguousarray(X_test_array)
-                y_train_array = np.ascontiguousarray(y_train_array)
-                y_test_array = np.ascontiguousarray(y_test_array)
-
-                # Default parameters
-                if params is None:
-                    params = {
-                        'max_depth': 3,
-                        'learning_rate': 0.1,
-                        'n_estimators': 100,
-                        'random_state': 42
+                train_idx = indices[:split_idx]
+                test_idx = indices[split_idx:]
+                
+                X_train_array = np.asarray(X.iloc[train_idx].values, dtype=np.float64, order='C')
+                X_test_array = np.asarray(X.iloc[test_idx].values, dtype=np.float64, order='C')
+                y_train_array = np.asarray(y.iloc[train_idx].values, dtype=np.float64, order='C')
+                y_test_array = np.asarray(y.iloc[test_idx].values, dtype=np.float64, order='C')
+                
+                # Use RobustXGBoostClient instead of sklearn wrapper
+                client = RobustXGBoostClient()
+                
+                # Try with autoencoder first for high-dimensional data
+                use_autoencoder = X_train_array.shape[1] > 20
+                
+                xgb_params = params or {
+                    'max_depth': 3,
+                    'learning_rate': 0.1,
+                    'n_estimators': 100,
+                    'random_state': 42
+                }
+                
+                # Train with RobustXGBoostClient
+                success = client.fit(
+                    X_train_array,
+                    y_train_array,
+                    task_type=task_type.lower(),
+                    use_autoencoder=use_autoencoder,
+                    **xgb_params
+                )
+                
+                if not success:
+                    model_results[dataset_name] = {
+                        'error': 'XGBoost and fallback models failed'
                     }
-
-                # Train model based on task type
+                    continue
+                
+                # Make predictions
+                y_pred = client.predict(X_test_array)
+                
+                # Test error using our error tester
                 if task_type == 'regression':
-                    model = xgb.XGBRegressor(**params)
-                    model.fit(X_train_array, y_train_array)
-                    y_pred = model.predict(X_test_array)
-
-                    # Test error using our error tester
                     error_results = self.error_tester.test_regression_error(y_test_array, y_pred)
-
-                else:  # classification
-                    le = LabelEncoder()
-                    y_train_enc = le.fit_transform(y_train_array)
-                    y_test_enc = le.transform(y_test_array)
-
-                    model = xgb.XGBClassifier(**params)
-                    model.fit(X_train_array, y_train_enc)
-                    y_pred_enc = model.predict(X_test_array)
-
-                    # Test error
-                    error_results = self.error_tester.test_classification_error(y_test_enc, y_pred_enc)
-                    error_results['label_encoder'] = le
+                else:
+                    if len(np.unique(y_train_array)) > 2:
+                        y_pred = np.argmax(y_pred, axis=1) if len(y_pred.shape) > 1 else y_pred
+                    y_test_int = y_test_array.astype(int)
+                    error_results = self.error_tester.test_classification_error(y_test_int, y_pred.astype(int))
 
                 # Only save if error rate < 10%
                 if error_results['passes_test']:
@@ -618,7 +834,7 @@ class MLIntegration:
                     
                     # Save model
                     with open(model_path, 'wb') as f:
-                        pickle.dump(model, f)
+                        pickle.dump(client, f)
                     
                     # Save metadata
                     metadata = {
@@ -628,8 +844,9 @@ class MLIntegration:
                         'target_col': target_col,
                         'feature_cols': valid_feature_cols,
                         'error_metrics': error_results,
-                        'params': {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))},
+                        'params': {k: v for k, v in xgb_params.items() if isinstance(v, (int, float, str, bool))},
                         'timestamp': datetime.now().isoformat(),
+                        'autoencoder_used': use_autoencoder,
                         'scaler': dataset.get('scaler'),
                         'poly_features': dataset.get('poly_features')
                     }
@@ -637,11 +854,12 @@ class MLIntegration:
                     with open(meta_path, 'w') as f:
                         json.dump(metadata, f, indent=4, default=str)
                     
-                    trained_models[dataset_name] = model
+                    trained_models[dataset_name] = client
                     model_results[dataset_name] = {
                         'model_id': model_id,
                         'error_results': error_results,
-                        'model_path': model_path
+                        'model_path': model_path,
+                        'with_autoencoder': use_autoencoder
                     }
                 else:
                     model_results[dataset_name] = {
