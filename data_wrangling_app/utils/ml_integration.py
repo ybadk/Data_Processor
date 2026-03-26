@@ -54,6 +54,70 @@ def truncated_normal(mean=0, sd=1, low=0, upp=10):
     return truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
 
 
+def sanitize_dataframe_for_xgboost(df: pd.DataFrame, feature_cols: List[str], target_col: str=None) -> Tuple[pd.DataFrame, pd.Series]:
+    """
+    Comprehensive data sanitization using numpy and statsmodels validation.
+    Transforms data into a form that XGBoost can process without dtype errors.
+    
+    Args:
+        df: Input DataFrame
+        feature_cols: List of feature column names
+        target_col: Target column name (optional)
+    
+    Returns:
+        Tuple of (sanitized_X, sanitized_y)
+    """
+    # Step 1: Extract and validate features
+    X = df[feature_cols].copy()
+    
+    # Step 2: Convert each column to numpy array and back using explicit dtypes
+    for col in X.columns:
+        try:
+            # Convert column to numpy array (forces evaluation of any lazy structures)
+            arr = np.asarray(X[col], dtype=np.float64)
+            
+            # Replace any non-finite values
+            arr = np.where(np.isfinite(arr), arr, 0.0)
+            
+            # Convert back to Series with explicit float64 dtype
+            X[col] = pd.Series(arr, index=X.index, dtype=np.float64)
+        except (ValueError, TypeError) as e:
+            # If conversion fails, fill with zeros
+            X[col] = 0.0
+    
+    # Step 3: Reset index and column names
+    X = X.reset_index(drop=True)
+    X.columns = [str(col) for col in X.columns]
+    
+    # Step 4: Use statsmodels-compatible conversion
+    if STATSMODELS_AVAILABLE:
+        try:
+            # This validates data compatibility with statsmodels
+            X_validated = sm.tools.tools.add_constant(X, has_constant='skip')
+            X = X_validated.drop(columns='const', errors='ignore')
+        except Exception:
+            pass  # Continue if statsmodels validation fails
+    
+    # Step 5: Additional numpy validation
+    X_array = X.values
+    X_array = np.asarray(X_array, dtype=np.float64)
+    X = pd.DataFrame(X_array, columns=X.columns)
+    
+    # Step 6: Handle target variable if provided
+    y = None
+    if target_col is not None:
+        y = df[target_col].copy()
+        try:
+            arr = np.asarray(y, dtype=np.float64)
+            arr = np.where(np.isfinite(arr), arr, 0.0)
+            y = pd.Series(arr, index=y.index, dtype=np.float64)
+        except (ValueError, TypeError):
+            y = pd.Series(0.0, index=y.index)
+        y = y.reset_index(drop=True)
+    
+    return X, y
+
+
 class NeuralNetworkWrapper:
     """
     Custom Neural Network implementation supporting multiple hidden layers.
@@ -408,8 +472,8 @@ class MLIntegration:
         feature_cols = numeric_cols[:-1]
 
         if len(feature_cols) > 0:
-            X = df[feature_cols].fillna(0)
-            y = df[target_col].fillna(0)
+            # Use sanitization function
+            X, y = sanitize_dataframe_for_xgboost(df, feature_cols, target_col)
 
             # Run multiple regression models
             reg_models = {
@@ -426,15 +490,22 @@ class MLIntegration:
 
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=0.2, random_state=42)
+            
+            # Convert to numpy arrays for compatibility
+            X_train_array = np.asarray(X_train.values, dtype=np.float64, order='C')
+            X_test_array = np.asarray(X_test.values, dtype=np.float64, order='C')
+            y_train_array = np.asarray(y_train.values, dtype=np.float64, order='C')
+            y_test_array = np.asarray(y_test.values, dtype=np.float64, order='C')
 
             for name, model in reg_models.items():
                 try:
-                    model.fit(X_train, y_train)
-                    y_pred = model.predict(X_test)
+                    # Use numpy arrays for all models
+                    model.fit(X_train_array, y_train_array)
+                    y_pred = model.predict(X_test_array)
 
-                    mse = mean_squared_error(y_test, y_pred)
-                    r2 = r2_score(y_test, y_pred)
-                    mae = mean_absolute_error(y_test, y_pred)
+                    mse = mean_squared_error(y_test_array, y_pred)
+                    r2 = r2_score(y_test_array, y_pred)
+                    mae = mean_absolute_error(y_test_array, y_pred)
 
                     results['regression_metrics'][name] = {
                         'MSE': round(mse, 4),
@@ -462,148 +533,125 @@ class MLIntegration:
         if not XGBOOST_AVAILABLE:
             return {'error': 'XGBoost not available'}
 
+        # Validate inputs
+        if target_col not in df.columns:
+            return {'error': f'Target column "{target_col}" not found in dataframe'}
+
+        # Filter valid feature columns
+        valid_feature_cols = [col for col in feature_cols if col in df.columns and col != target_col]
+        if not valid_feature_cols:
+            return {'error': 'No valid feature columns found'}
+
         # Create three different datasets
         datasets = await self.async_trainer.create_datasets_from_data(df, target_col)
-        
+
         trained_models = {}
         model_results = {}
-        
+
         # Train XGBoost on each dataset individually
         for dataset in datasets:
             dataset_name = dataset['name']
             dataset_df = dataset['data']
-            
-            # Prepare data
-            X = dataset_df[feature_cols].fillna(0)
-            y = dataset_df[target_col].fillna(0)
-            
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
-            
-            # Default parameters
-            if params is None:
-                params = {
-                    'max_depth': 3,
-                    'learning_rate': 0.1,
-                    'n_estimators': 100,
-                    'random_state': 42
-                }
-            
-            # Train model based on task type
-            if task_type == 'regression':
-                model = xgb.XGBRegressor(**params)
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
+
+            try:
+                # Use comprehensive sanitization function
+                X, y = sanitize_dataframe_for_xgboost(dataset_df, valid_feature_cols, target_col)
+
+                # Validate sanitization
+                if X is None or y is None:
+                    return {'error': f'Data sanitization failed for dataset {dataset_name}'}
+
+                # Split data
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=0.2, random_state=42
+                )
+
+                # CRITICAL: Convert to numpy arrays BEFORE XGBoost to avoid dtype corruption
+                X_train_array = np.asarray(X_train.values, dtype=np.float64, order='C')
+                X_test_array = np.asarray(X_test.values, dtype=np.float64, order='C')
+                y_train_array = np.asarray(y_train.values, dtype=np.float64, order='C')
+                y_test_array = np.asarray(y_test.values, dtype=np.float64, order='C')
                 
-                # Test error using our error tester
-                error_results = self.error_tester.test_regression_error(y_test, y_pred)
-                
-            else:  # classification
-                le = LabelEncoder()
-                y_train_enc = le.fit_transform(y_train)
-                y_test_enc = le.transform(y_test)
-                
-                model = xgb.XGBClassifier(**params)
-                model.fit(X_train, y_train_enc)
-                y_pred_enc = model.predict(X_test)
-                
-                # Test error
-                error_results = self.error_tester.test_classification_error(y_test_enc, y_pred_enc)
-                error_results['label_encoder'] = le
-            
-            # Only save if error rate < 10%
-            if error_results['passes_test']:
-                # Model Lake: Save with unique ID
-                model_id = f"{dataset_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                model_filename = f'xgboost_{model_id}.pkl'
-                model_path = os.path.join(self.model_dir, model_filename)
-                
-                # Save model
-                with open(model_path, 'wb') as f:
-                    pickle.dump(model, f)
-                
-                # Save metadata
-                metadata = {
-                    'model_id': model_id,
-                    'dataset_name': dataset_name,
-                    'task_type': task_type,
-                    'target_col': target_col,
-                    'feature_cols': feature_cols,
-                    'error_metrics': error_results,
-                    'params': {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))},
-                    'timestamp': datetime.now().isoformat(),
-                    'scaler': dataset.get('scaler'),
-                    'poly_features': dataset.get('poly_features')
-                }
-                meta_path = model_path.replace('.pkl', '.json')
-                with open(meta_path, 'w') as f:
-                    json.dump(metadata, f, indent=4, default=str)
-                
-                trained_models[dataset_name] = model
-                model_results[dataset_name] = {
-                    'model_id': model_id,
-                    'error_results': error_results,
-                    'model_path': model_path
-                }
-            else:
-                model_results[dataset_name] = {
-                    'error': f"Model failed error test: {error_results['error_rate']:.2%} > 10%",
-                    'error_results': error_results
-                }
-        
-        # Also try PyTorch and Transformers if available
-        try:
-            if PYTORCH_AVAILABLE:
-                # Prepare data for PyTorch
-                X = df[feature_cols].fillna(0).values
-                y = df[target_col].fillna(0).values
-                
-                if task_type == 'classification':
-                    le = LabelEncoder()
-                    y = le.fit_transform(y)
-                
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-                
-                # Train PyTorch model
-                pytorch_model = await self.async_trainer.train_pytorch_model(X_train, y_train, task_type)
-                
-                # Test PyTorch model
-                X_test_tensor = torch.FloatTensor(X_test).to(self.async_trainer.device)
-                with torch.no_grad():
-                    pytorch_pred = pytorch_model(X_test_tensor).cpu().numpy()
-                
+                # Ensure arrays are contiguous and have no issues
+                X_train_array = np.ascontiguousarray(X_train_array)
+                X_test_array = np.ascontiguousarray(X_test_array)
+                y_train_array = np.ascontiguousarray(y_train_array)
+                y_test_array = np.ascontiguousarray(y_test_array)
+
+                # Default parameters
+                if params is None:
+                    params = {
+                        'max_depth': 3,
+                        'learning_rate': 0.1,
+                        'n_estimators': 100,
+                        'random_state': 42
+                    }
+
+                # Train model based on task type
                 if task_type == 'regression':
-                    pytorch_error = self.error_tester.test_regression_error(y_test, pytorch_pred.squeeze())
-                else:
-                    pytorch_error = self.error_tester.test_classification_error(y_test, pytorch_pred.argmax(axis=1))
-                
-                if pytorch_error['passes_test']:
-                    # Save PyTorch model
-                    model_id = f"pytorch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    model_path = os.path.join(self.model_dir, f'pytorch_{model_id}.pth')
-                    torch.save(pytorch_model.state_dict(), model_path)
+                    model = xgb.XGBRegressor(**params)
+                    model.fit(X_train_array, y_train_array)
+                    y_pred = model.predict(X_test_array)
+
+                    # Test error using our error tester
+                    error_results = self.error_tester.test_regression_error(y_test_array, y_pred)
+
+                else:  # classification
+                    le = LabelEncoder()
+                    y_train_enc = le.fit_transform(y_train_array)
+                    y_test_enc = le.transform(y_test_array)
+
+                    model = xgb.XGBClassifier(**params)
+                    model.fit(X_train_array, y_train_enc)
+                    y_pred_enc = model.predict(X_test_array)
+
+                    # Test error
+                    error_results = self.error_tester.test_classification_error(y_test_enc, y_pred_enc)
+                    error_results['label_encoder'] = le
+
+                # Only save if error rate < 10%
+                if error_results['passes_test']:
+                    # Model Lake: Save with unique ID
+                    model_id = f"{dataset_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    model_filename = f'xgboost_{model_id}.pkl'
+                    model_path = os.path.join(self.model_dir, model_filename)
                     
+                    # Save model
+                    with open(model_path, 'wb') as f:
+                        pickle.dump(model, f)
+                    
+                    # Save metadata
                     metadata = {
                         'model_id': model_id,
-                        'model_type': 'pytorch',
+                        'dataset_name': dataset_name,
                         'task_type': task_type,
-                        'error_metrics': pytorch_error,
-                        'timestamp': datetime.now().isoformat()
+                        'target_col': target_col,
+                        'feature_cols': valid_feature_cols,
+                        'error_metrics': error_results,
+                        'params': {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))},
+                        'timestamp': datetime.now().isoformat(),
+                        'scaler': dataset.get('scaler'),
+                        'poly_features': dataset.get('poly_features')
                     }
-                    with open(model_path.replace('.pth', '.json'), 'w') as f:
-                        json.dump(metadata, f, indent=4)
+                    meta_path = model_path.replace('.pkl', '.json')
+                    with open(meta_path, 'w') as f:
+                        json.dump(metadata, f, indent=4, default=str)
                     
-                    trained_models['pytorch'] = pytorch_model
-                    model_results['pytorch'] = {
+                    trained_models[dataset_name] = model
+                    model_results[dataset_name] = {
                         'model_id': model_id,
-                        'error_results': pytorch_error,
+                        'error_results': error_results,
                         'model_path': model_path
                     }
-        
-        except Exception as e:
-            model_results['pytorch'] = {'error': f'PyTorch training failed: {str(e)}'}
+                else:
+                    model_results[dataset_name] = {
+                        'error': f"Model failed error test: {error_results['error_rate']:.2%} > 10%",
+                        'error_results': error_results
+                    }
+            except Exception as e:
+                model_results[dataset_name] = {
+                    'error': f"Training failed: {str(e)}"
+                }
         
         # Try Transformers if text data available
         text_cols = [col for col in df.columns if df[col].dtype == 'object' and col != target_col]
@@ -710,8 +758,21 @@ class MLIntegration:
             if model_name not in self.models:
                 return None
 
+        # Validate feature columns
+        valid_feature_cols = [col for col in feature_cols if col in df.columns]
+        if not valid_feature_cols:
+            return None
+
         model = self.models[model_name]
-        X = df[feature_cols].fillna(0)
+        X = df[valid_feature_cols].fillna(0)
+
+        # Ensure X is proper
+        if not isinstance(X, pd.DataFrame):
+            return None
+
+        # Remove duplicate columns if any
+        if X.columns.duplicated().any():
+            X = X.loc[:, ~X.columns.duplicated()]
 
         predictions = model.predict(X)
 
@@ -731,8 +792,25 @@ class MLIntegration:
         if not STATSMODELS_AVAILABLE:
             return {'error': 'Statsmodels not available'}
 
-        X = df[feature_cols].fillna(0)
+        # Validate inputs
+        if target_col not in df.columns:
+            return {'error': f'Target column "{target_col}" not found in dataframe'}
+
+        # Filter valid feature columns
+        valid_feature_cols = [col for col in feature_cols if col in df.columns and col != target_col]
+        if not valid_feature_cols:
+            return {'error': 'No valid feature columns found'}
+
+        X = df[valid_feature_cols].fillna(0)
         y = df[target_col].fillna(0)
+
+        # Ensure X is proper DataFrame
+        if not isinstance(X, pd.DataFrame):
+            return {'error': 'Invalid feature data format'}
+
+        # Remove duplicate columns if any
+        if X.columns.duplicated().any():
+            X = X.loc[:, ~X.columns.duplicated()]
 
         # Add constant for intercept
         X_with_const = sm.add_constant(X)

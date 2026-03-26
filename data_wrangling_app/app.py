@@ -10,7 +10,7 @@ from utils.visualizations import VisualizationEngine
 from utils.email_service import EmailService
 from utils.database import DatabaseManager
 from utils.data_processor import DataProcessor
-from utils.ml_integration import MLIntegration, NeuralNetworkWrapper
+from utils.ml_integration import MLIntegration, NeuralNetworkWrapper, sanitize_dataframe_for_xgboost
 from utils.ml_finance import MLFinanceUtils, render_rnn_component, render_autoencoder_component
 from config import *
 from sklearn import linear_model
@@ -2590,10 +2590,27 @@ def render_machine_learning():
 
         if st.button("Train Regression Model", key="train_reg"):
             if feature_cols:
-                X = df[feature_cols].fillna(0)
-                y = df[target_col].fillna(0)
+                # Validate feature columns
+                valid_features = [col for col in feature_cols if col in df.columns and col != target_col]
+                if not valid_features:
+                    st.error("No valid feature columns selected.")
+                    return
+
+                # Use aggressive sanitization function
+                try:
+                    X, y = sanitize_dataframe_for_xgboost(df, valid_features, target_col)
+                except Exception as e:
+                    st.error(f"Data preparation error: {str(e)}")
+                    return
+
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=test_size, random_state=42)
+                
+                # Convert to numpy arrays to avoid dtype issues with XGBoost
+                X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
+                X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
+                y_train = np.asarray(y_train.values, dtype=np.float64, order='C')
+                y_test = np.asarray(y_test.values, dtype=np.float64, order='C')
 
                 # Select and train model
                 if model_type == "Linear Regression":
@@ -2676,11 +2693,27 @@ def render_machine_learning():
 
         if st.button("Train Classification Model", key="train_cls"):
             if feature_cols_cls:
-                X = df[feature_cols_cls].fillna(0)
-                y = LabelEncoder().fit_transform(
-                    df[target_col_cls].fillna('Unknown'))
+                # Validate feature columns
+                valid_features = [col for col in feature_cols_cls if col in df.columns and col != target_col_cls]
+                if not valid_features:
+                    st.error("No valid feature columns selected.")
+                    return
+
+                # Use aggressive sanitization function
+                try:
+                    X, _ = sanitize_dataframe_for_xgboost(df, valid_features)
+                    y = LabelEncoder().fit_transform(
+                        df[target_col_cls].fillna('Unknown'))
+                except Exception as e:
+                    st.error(f"Data preparation error: {str(e)}")
+                    return
+
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.2, random_state=42)
+                
+                # Convert to numpy arrays to avoid dtype issues with XGBoost
+                X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
+                X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
 
                 if cls_model_type == "Logistic Regression":
                     model = LogisticRegression(max_iter=1000)
@@ -2732,7 +2765,22 @@ def render_machine_learning():
 
         if st.button("Perform Clustering", key="perform_cluster"):
             if len(cluster_cols) >= 2:
-                X = df[cluster_cols].fillna(0)
+                # Validate feature columns
+                valid_features = [col for col in cluster_cols if col in df.columns]
+                if len(valid_features) < 2:
+                    st.error("Need at least 2 valid feature columns for clustering.")
+                    return
+
+                # Use aggressive sanitization function
+                try:
+                    X, _ = sanitize_dataframe_for_xgboost(df, valid_features)
+                except Exception as e:
+                    st.error(f"Data preparation error: {str(e)}")
+                    return
+
+                # Convert to numpy arrays to avoid dtype issues
+                X = np.asarray(X.values, dtype=np.float64, order='C')
+
                 scaler = StandardScaler()
                 X_scaled = scaler.fit_transform(X)
 
@@ -2794,13 +2842,29 @@ def render_machine_learning():
 
         if st.button("Train Neural Network", key="train_nn"):
             if nn_features:
-                X = df[nn_features].fillna(0)
-                y = df[nn_target].fillna(0)
+                # Validate feature columns
+                valid_features = [col for col in nn_features if col in df.columns and col != nn_target]
+                if not valid_features:
+                    st.error("No valid feature columns selected.")
+                    return
+
+                # Use aggressive sanitization function
+                try:
+                    X, y = sanitize_dataframe_for_xgboost(df, valid_features, nn_target)
+                except Exception as e:
+                    st.error(f"Data preparation error: {str(e)}")
+                    return
 
                 hidden = tuple(int(x.strip())
                                for x in hidden_layers.split(','))
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.2, random_state=42)
+                
+                # Convert to numpy arrays to avoid dtype issues with XGBoost
+                X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
+                X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
+                y_train = np.asarray(y_train.values, dtype=np.float64, order='C')
+                y_test = np.asarray(y_test.values, dtype=np.float64, order='C')
 
                 scaler = StandardScaler()
                 X_train_scaled = scaler.fit_transform(X_train)
@@ -3187,15 +3251,29 @@ def render_ensemble_workflows():
                         # Engine with async training
                         engine = EnsembleEngine(wrappers)
                         
-                        # Split data
-                        X = df[features_var]
-                        y = df[target_var]
-                        
+                        # Split data with validation
+                        # Filter valid feature columns
+                        valid_features = [col for col in features_var if col in df.columns and col != target_var]
+                        if not valid_features:
+                            st.error("No valid feature columns selected.")
+                            return
+
+                        # Use aggressive sanitization function
+                        try:
+                            X, y = sanitize_dataframe_for_xgboost(df, valid_features, target_var)
+                        except Exception as e:
+                            st.error(f"Data preparation error: {str(e)}")
+                            return
+
                         if task_type == "Classification":
                             le = LabelEncoder()
                             y = le.fit_transform(y.fillna('Unknown'))
-                        
+
                         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                        
+                        # Convert to numpy arrays to avoid dtype issues
+                        X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
+                        X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
                         
                         # Async fit
                         await engine.fit(X_train, y_train)
