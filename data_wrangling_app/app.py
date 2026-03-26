@@ -32,7 +32,7 @@ from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classi
 from sklearn.covariance import EllipticEnvelope
 from scipy.special import expit as activation_function
 from scipy.stats import truncnorm
-from utils.ui_components import render_glass_card, render_tooltip, render_title_card
+from utils.ui_components import render_glass_card, render_tooltip, render_title_card, render_legacy_tooltip
 
 # App Modules
 import os
@@ -486,7 +486,7 @@ def show_transitional_loader():
     placeholder = st.empty()
     with placeholder.container():
         st.markdown(f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>', unsafe_allow_html=True)
-        time.sleep(2) # Reduced to 2s for better UX while cycling
+        time.sleep(2)  # Reduced to 2s for better UX while cycling
     placeholder.empty()
 
 # Loading animation
@@ -1258,15 +1258,15 @@ def render_home():
     
     with f_col1:
         render_glass_card("Upload Data", '<svg viewBox="0 0 640 512" height="1em"><path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9C105.4 112.9 181.8 48 272 48c90.1 0 166.5 64.9 175.7 152.1C503.8 219.8 544 273.2 544 336c0 79.5-64.5 144-144 144H144zM224 338.7V384c0 8.8 7.2 16 16 16h64c8.8 0 16-7.2 16-16v-45.3h37.3c9.4 0 14.1-11.4 7.5-18.1L301.5 257.3c-4.1-4.1-10.8-4.1-14.9 0L223.3 320.6c-6.7 6.7-1.9 18.1 7.5 18.1H224z"/></svg>', rotation=-15)
-        render_tooltip("Quick Import", "Support for CSV, Excel, JSON, and SQL databases.", "Data Ingestion")
+        render_legacy_tooltip("Request for machine learning prediction models to be used on historical datasets. send a direct email for assistance")
         
     with f_col2:
         render_glass_card("Process Data", '<svg viewBox="0 0 512 512" height="1em"><path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-75.6 68.1c.7 5.4 1.1 10.9 1.1 16.5s-.4 11.1-1.1 16.5l75.6 68.1c6.9 6.2 9.6 15.9 6.4 24.6l-44.6 122.6c-3.2 8.7-11.9 14.3-21.2 13.1l-100.3-13.4c-18.4 15.3-40.1 27.3-64 34.8V448c0 10.6-8.6 19.2-19.2 19.2s-19.2-8.6-19.2-19.2V439.1c-23.9-7.5-45.6-19.5-64-34.8l-100.3 13.4c-9.3 1.2-18-4.4-21.2-13.1L16.1 282c-3.2-8.7-.5-18.4 6.4-24.6l75.6-68.1c-.7-5.4-1.1-10.9-1.1-16.5s.4-11.1 1.1-16.5L22.5 88.2c-6.9-6.2-9.6-15.9-6.4-24.6L60.7-59c3.2-8.7 11.9-14.3 21.2-13.1l100.3 13.4C200.6-75 222.3-87 246.2-94.5V-160c0-10.6 8.6-19.2 19.2-19.2s19.2 8.6 19.2 19.2V-94.5c23.9 7.5 45.6 19.5 64 34.8l100.3-13.4c9.3-1.2 18 4.4 21.2 13.1l44.6 122.6zM256 160a96 96 0 1 0 0 192 96 96 0 1 0 0-192z"/></svg>', rotation=5)
-        render_tooltip("Automation", "Smart cleaning and outlier detection workflows.", "Smart Wrangling")
+        render_legacy_tooltip("Request for detailed data exploratory analysis using correlated features from historical or present datasets.")
         
     with f_col3:
         render_glass_card("Analyze & ML", '<svg viewBox="0 0 576 512" height="1em"><path d="M304 240V16.6c0-9 7-16.6 16-16.6C443.7 0 544 100.3 544 224c0 9-7.6 16-16.6 16H304zM32 272C32 150.7 122.1 50.3 239 34.3c9.2-1.3 17 6.1 17 15.4V288L412.5 444.5c6.7 6.7 6.2 17.7-1.5 23.1C371.8 495.6 325.9 512 276.5 512 141.9 512 32 404.1 32 272zm526.4 16.7c7.3 7.6 6.7 19.8-1.5 26.1L400.3 435.5 288 323.2V272h231c9 0 16.5 7.1 17.4 16.7z"/></svg>', rotation=25)
-        render_tooltip("Prediction", "Integrated AutoML and Ensemble strategies.", "Deep Learning")
+        render_legacy_tooltip("Request for detailed visualizations with feature engineering and machine learning algorithms implemented on datasets.")
     st.divider()
 
     # Statistics
@@ -2820,28 +2820,40 @@ def render_machine_learning():
     # XGBoost Tab
     with tab5:
         st.markdown(
-            "### XGBoost - Advanced Gradient Boosting")
+            "### 🚀 Advanced Machine Learning with XGBoost")
         st.info(
-            "XGBoost is a powerful gradient boosting algorithm that excels at structured/tabular data.")
+            "🎓 **New to ML?** XGBoost is like a super-smart decision tree that learns patterns in your data. It automatically creates multiple datasets, tests model quality, and only saves models with < 10% error. Perfect for beginners!"
+        )
+        st.markdown("---")
 
         xgb_target = st.selectbox(
-            "Select Target Variable", numeric_cols, key="xgb_target")
-        xgb_features = st.multiselect("Select Feature Variables",
+            "🎯 Select Target Variable (what you want to predict)", numeric_cols, key="xgb_target",
+            help="Choose the column you want your model to predict. For example, if predicting house prices, select the 'price' column."
+        )
+        xgb_features = st.multiselect("📊 Select Feature Variables (inputs for prediction)",
                                       [c for c in numeric_cols if c != xgb_target],
-                                      key="xgb_features")
+                                      key="xgb_features",
+                                      help="Choose the columns that will help predict your target. More features can improve accuracy but may cause overfitting."
+        )
 
         col1, col2 = st.columns(2)
         with col1:
             xgb_task = st.radio(
-                "Task Type", ["Regression", "Classification"], key="xgb_task")
-            max_depth = st.slider("Max Depth", 2, 10, 3, key="xgb_depth")
+                "🤖 Task Type", ["Regression", "Classification"], key="xgb_task",
+                help="Regression: Predict continuous numbers (prices, temperatures). Classification: Predict categories (yes/no, types)."
+            )
+            max_depth = st.slider("🌳 Max Tree Depth", 2, 10, 3, key="xgb_depth",
+                                help="How deep each decision tree can grow. Deeper trees can model complex patterns but may overfit.")
         with col2:
             n_estimators = st.slider(
-                "Number of Estimators", 50, 500, 100, key="xgb_est")
-            learning_rate = st.select_slider("Learning Rate",
-                                             options=[0.01, 0.05,
-                                                      0.1, 0.2, 0.3],
-                                             value=0.1, key="xgb_lr")
+                "🌲 Number of Trees", 50, 500, 100, key="xgb_est",
+                help="How many decision trees to combine. More trees usually improve accuracy but take longer to train."
+            )
+            learning_rate = st.select_slider("⚡ Learning Rate",
+                                             options=[0.01, 0.05, 0.1, 0.2, 0.3],
+                                             value=0.1, key="xgb_lr",
+                                             help="How much each tree contributes. Lower values need more trees but can prevent overfitting."
+            )
         
         xgb_sub_tab1, xgb_sub_tab2 = st.tabs(["🚀 Training & Simple Prediction", "🌊 Model Lake Browser"])
         
@@ -2849,7 +2861,10 @@ def render_machine_learning():
             col_train, col_pred = st.columns(2)
             
             with col_train:
-                if st.button(" Train XGBoost Model", key="train_xgb"):
+                st.markdown("#### 🎯 Train Your Model")
+                st.write("Click below to train advanced ML models. We'll create 3 different versions of your data and train models using XGBoost, PyTorch, and Transformers. Only high-quality models (< 10% error) will be saved!")
+                
+                if st.button("🚀 Train Advanced ML Models", key="train_xgb", type="primary"):
                     if xgb_features:
                         with st.spinner("Training XGBoost model..."):
                             params = {
@@ -2869,38 +2884,27 @@ def render_machine_learning():
                         if 'error' not in result:
                             st.markdown("""
                                 <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                                    <span class="icon-animated"> </span> XGBoost model trained successfully!
+                                    <span class="icon-animated"> </span> Advanced ML training completed!
                                 </div>
                             """, unsafe_allow_html=True)
 
-                            # Display metrics
-                            st.markdown(
-                                "#### Model Metrics")
-                            metrics = result['metrics']
+                            # Display results for each dataset/model
+                            st.markdown("#### Training Results")
+                            
+                            results = result.get('results', {})
+                            passed_count = result.get('passed_models', 0)
+                            total_datasets = result.get('total_datasets', 0)
+                            
+                            st.info(f"✅ {passed_count} out of {total_datasets} models passed error testing (< 10% error)")
+                            
+                            for model_name, model_result in results.items():
+                                if 'model_id' in model_result:
+                                    st.success(f"🎯 {model_name.upper()}: Model saved with {model_result['error_results']['error_rate']:.2%} error")
+                                elif 'error' in model_result:
+                                    st.warning(f"⚠️ {model_name.upper()}: {model_result['error']}")
+                                else:
+                                    st.info(f"ℹ️ {model_name.upper()}: {model_result}")
 
-                            if xgb_task == "Regression":
-                                col_m1, col_m2, col_m3 = st.columns(3)
-                                with col_m1:
-                                    st.metric(
-                                        "R² Score", f"{metrics['R2']:.4f}")
-                                with col_m2:
-                                    st.metric("RMSE", f"{metrics['RMSE']:.4f}")
-                                with col_m3:
-                                    st.metric("MAE", f"{metrics['MAE']:.4f}")
-                            else:
-                                col_m1, col_m2, col_m3 = st.columns(3)
-                                with col_m1:
-                                    st.metric(
-                                        "Accuracy", f"{metrics['Accuracy']:.4f}")
-                                with col_m2:
-                                    st.metric(
-                                        "Precision", f"{metrics['Precision']:.4f}")
-                                with col_m3:
-                                    st.metric(
-                                        "Recall", f"{metrics['Recall']:.4f}")
-
-                            st.info(
-                                f" Model saved to: {result['model_path']}")
                         else:
                             st.error(f"Error: {result['error']}")
 
@@ -2938,18 +2942,55 @@ def render_machine_learning():
                                 "No trained model found. Please train a model first.")
 
         with xgb_sub_tab2:
-            st.markdown("### 🌊 XGBoost Model Lake")
-            st.info("Select multiple models from your history to see collective predictions.")
+            st.markdown("### 🌊 Your Model Lake - Saved AI Models")
+            st.info("🎓 **What is this?** Your personal collection of trained AI models! We only save models that are accurate enough (< 10% error) for real-world use. Select multiple models to see how they all predict on your data.")
             
-            models_in_lake = st.session_state.ml_integration.list_xgboost_models()
+            models_in_lake = st.session_state.ml_integration.list_models_in_lake()
             if not models_in_lake:
-                st.warning("The Model Lake is currently empty. Train some models first!")
+                st.warning("🌟 No models saved yet! Train some models first using the tab on the left.")
+                st.markdown("💡 **Tip:** Start with the 'Training' tab to create your first AI model!")
             else:
-                # Display as Table
-                models_df = pd.DataFrame(models_in_lake)
-                st.dataframe(models_df[['model_id', 'task_type', 'target_col', 'timestamp']], use_container_width=True)
+                # Display as enhanced table
+                models_df = pd.DataFrame([{
+                    'Model ID': m.get('model_id', 'N/A'),
+                    'Type': m.get('model_type', 'xgboost'),
+                    'Dataset': m.get('dataset_name', 'N/A'),
+                    'Task': m.get('task_type', 'N/A'),
+                    'Error Rate': f"{m.get('error_metrics', {}).get('error_rate', 0):.2%}",
+                    'Timestamp': m.get('timestamp', 'N/A')[:19]  # Truncate ISO format
+                } for m in models_in_lake])
+                st.dataframe(models_df, use_container_width=True)
                 
-                selected_ids = st.multiselect("Select Models for Lake Prediction", 
+                # Model selection for inference
+                selected_models = st.multiselect(
+                    "Select models for inference:",
+                    [m['model_id'] for m in models_in_lake],
+                    key="selected_lake_models"
+                )
+                
+                if selected_models and st.button("🚀 Run Inference on Selected Models", key="lake_inference"):
+                    with st.spinner("Running inference across selected models..."):
+                        inference_results = asyncio.run(
+                            st.session_state.ml_integration.make_predictions_multi(df, selected_models)
+                        )
+                        
+                        if inference_results is not None:
+                            st.markdown("#### Multi-Model Inference Results")
+                            st.dataframe(inference_results.head(20), use_container_width=True)
+                            
+                            # Download results
+                            csv = inference_results.to_csv(index=False)
+                            st.download_button(
+                                label="📥 Download Inference Results",
+                                data=csv,
+                                file_name="multi_model_inference.csv",
+                                mime="text/csv",
+                                key="download_inference"
+                            )
+                        else:
+                            st.error("Inference failed. Check model compatibility.")
+                
+                selected_ids = st.multiselect("Select Models for Lake Prediction",
                                              [m['model_id'] for m in models_in_lake],
                                              key="lake_select")
                 
@@ -3085,62 +3126,65 @@ def render_ensemble_workflows():
             # Show premium loader
             show_transitional_loader()
             
-            with st.spinner("Building and training ensemble..."):
-                try:
-                    # Prepare wrappers
-                    wrappers = []
-                    for model_name in selected_ml:
-                        wrappers.append(CustomModelWrapper(model_name, "machine_learning", model_type=task_type.lower()))
-                    for model_name in selected_nn:
-                        wrappers.append(CustomModelWrapper(model_name, "neural_network", model_type=task_type.lower()))
-                    
-                    # Engine
-                    engine = EnsembleEngine(wrappers)
-                    
-                    # Split data
-                    X = df[features_var]
-                    y = df[target_var]
-                    
-                    if task_type == "Classification":
-                        le = LabelEncoder()
-                        y = le.fit_transform(y.fillna('Unknown'))
-                    
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-                    
-                    # Fit
-                    engine.fit(X_train, y_train)
-                    
-                    # Predict
-                    method = "voting" if "Voting" in ensemble_method else "stacking"
-                    y_pred = engine.predict(X_test, method=method)
-                    
-                    # Metrics
-                    st.success("Ensemble Workflow Completed Successfully!")
-                    
-                    m_col1, m_col2, m_col3 = st.columns(3)
-                    if task_type == "Regression":
-                        mse = mean_squared_error(y_test, y_pred)
-                        r2 = r2_score(y_test, y_pred)
-                        m_col1.metric("Ensemble R²", f"{r2:.4f}")
-                        m_col2.metric("Ensemble MSE", f"{mse:.4f}")
+            async def run_ensemble():
+                with st.spinner("Building and training ensemble..."):
+                    try:
+                        # Prepare wrappers
+                        wrappers = []
+                        for model_name in selected_ml:
+                            wrappers.append(CustomModelWrapper(model_name, "machine_learning", model_type=task_type.lower()))
+                        for model_name in selected_nn:
+                            wrappers.append(CustomModelWrapper(model_name, "neural_network", model_type=task_type.lower()))
                         
-                        # Comparison Chart
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', name='Ensemble Predictions'))
-                        fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()], mode='lines', name='Perfect Fit'))
-                        fig.update_layout(title="Ensemble Analysis: Actual vs Predicted", template="plotly_dark")
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        acc = accuracy_score(y_test, y_pred)
-                        m_col1.metric("Ensemble Accuracy", f"{acc:.2%}")
+                        # Engine with async training
+                        engine = EnsembleEngine(wrappers)
                         
-                        # Confusion Matrix
-                        cm = confusion_matrix(y_test, y_pred)
-                        fig_cm = px.imshow(cm, text_auto=True, title="Ensemble Confusion Matrix", template="plotly_dark")
-                        st.plotly_chart(fig_cm, use_container_width=True)
+                        # Split data
+                        X = df[features_var]
+                        y = df[target_var]
+                        
+                        if task_type == "Classification":
+                            le = LabelEncoder()
+                            y = le.fit_transform(y.fillna('Unknown'))
+                        
+                        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                        
+                        # Async fit
+                        await engine.fit(X_train, y_train)
+                        
+                        # Async predict
+                        method = "voting" if "Voting" in ensemble_method else "stacking"
+                        y_pred = await engine.predict(X_test, method=method)
+                        
+                        # Metrics
+                        st.success("Ensemble Workflow Completed Successfully!")
+                        
+                        m_col1, m_col2, m_col3 = st.columns(3)
+                        if task_type == "Regression":
+                            mse = mean_squared_error(y_test, y_pred)
+                            r2 = r2_score(y_test, y_pred)
+                            m_col1.metric("Ensemble R²", f"{r2:.4f}")
+                            m_col2.metric("Ensemble MSE", f"{mse:.4f}")
+                            
+                            # Comparison Chart
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', name='Ensemble Predictions'))
+                            fig.add_trace(go.Scatter(x=[y_test.min(), y_test.max()], y=[y_test.min(), y_test.max()], mode='lines', name='Perfect Fit'))
+                            fig.update_layout(title="Ensemble Analysis: Actual vs Predicted", template="plotly_dark")
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            acc = accuracy_score(y_test, y_pred)
+                            m_col1.metric("Ensemble Accuracy", f"{acc:.2%}")
+                            
+                            # Confusion Matrix
+                            cm = confusion_matrix(y_test, y_pred)
+                            fig_cm = px.imshow(cm, text_auto=True, title="Ensemble Confusion Matrix", template="plotly_dark")
+                            st.plotly_chart(fig_cm, use_container_width=True)
 
-                except Exception as e:
-                    st.error(f"Ensemble execution failed: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Ensemble execution failed: {str(e)}")
+            
+            asyncio.run(run_ensemble())
 
 
 def main():

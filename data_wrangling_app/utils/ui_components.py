@@ -90,3 +90,51 @@ def render_title_card(title: str, subtitle: str, tag: str = "Premium"):
     .ui-flex {{ display: flex; justify-content: space-between; align-items: center; }}
     </style>
     """, unsafe_allow_html=True)
+
+def render_legacy_tooltip(tip_text: str, position: int = 4):
+    """Renders the original 'item-hints' tooltip dot from the earlier app versions."""
+    st.markdown(f"""
+    <div class="item-hints">
+      <div class="hint" data-position="{position}">
+        <span class="hint-radius"></span>
+        <span class="hint-dot">Tip</span>
+        <div class="hint-content do--split-children">
+          <p>{tip_text}</p>
+        </div>
+      </div>
+    </div>
+    <style>
+    .item-hints {{
+      cursor: pointer; display: flex; justify-content: flex-start; margin-top: -60px;
+    }}
+    .item-hints .hint {{
+      margin: 80px auto 20px auto; position: relative; display: flex; justify-content: center; align-items: center;
+    }}
+    .item-hints .hint-dot {{
+      z-index: 3; border: 1px solid #ffe4e4; border-radius: 50%; width: 50px; height: 50px;
+      -webkit-transform: translate(-0%, -0%) scale(0.95); transform: translate(-0%, -0%) scale(0.95);
+      margin: auto; display: flex; align-items: center; justify-content: center; color: white;
+    }}
+    .item-hints .hint-radius {{
+      background-color: rgba(255, 255, 255, 0.1); border-radius: 50%; position: absolute;
+      top: 50%; left: 50%; margin: -25px 0 0 -25px; width: 50px; height: 50px;
+      opacity: 0; visibility: hidden; -webkit-transform: scale(0); transform: scale(0);
+      transition: all 0.5s ease;
+    }}
+    .item-hints .hint:hover .hint-radius {{
+      opacity: 1; visibility: visible; -webkit-transform: scale(2); transform: scale(2);
+    }}
+    .item-hints .hint-content {{
+      width: 250px; position: absolute; z-index: 5; padding: 25px 0; opacity: 0;
+      transition: opacity 0.7s ease, visibility 0.7s ease; color: #fff; visibility: hidden; pointer-events: none;
+      background: rgba(0,0,0,0.8); border-radius: 8px; padding: 15px; bottom: 70px; left: 50%; margin-left: -125px;
+    }}
+    .item-hints .hint:hover .hint-content {{
+      opacity: 1; visibility: visible;
+    }}
+    .item-hints .hint-content::after {{
+      content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
+      border-width: 5px; border-style: solid; border-color: rgba(0,0,0,0.8) transparent transparent transparent;
+    }}
+    </style>
+    """, unsafe_allow_html=True)

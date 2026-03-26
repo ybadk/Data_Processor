@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import asyncio
 from typing import List, Dict, Any, Optional
 from .custom_ml_wrapper import CustomModelWrapper
 
@@ -13,28 +14,32 @@ class EnsembleEngine:
         self.model_type = wrappers[0].model_type if wrappers else 'classification'
         self.is_trained = all(w.is_trained for w in wrappers) if wrappers else False
 
-    def fit(self, X: np.ndarray, y: np.ndarray, **kwargs):
-        """Standard training interface"""
-        success_count = 0
+    async def fit(self, X: np.ndarray, y: np.ndarray, **kwargs):
+        """Standard training interface with simultaneous execution"""
+        tasks = []
         for wrapper in self.wrappers:
-            if wrapper.fit(X, y, **kwargs):
-                success_count += 1
+            # Run blocking fit in a separate thread for parallelism
+            tasks.append(asyncio.to_thread(wrapper.fit, X, y, **kwargs))
+        
+        results = await asyncio.gather(*tasks)
+        success_count = sum(1 for r in results if r)
         
         if success_count > 0:
             self.is_trained = True
             return True
         return False
 
-    def predict(self, X: np.ndarray, method: str = "voting") -> np.ndarray:
-        """Standard prediction interface with logic for different ensemble methods"""
+    async def predict(self, X: np.ndarray, method: str = "voting") -> np.ndarray:
+        """Standard prediction interface with simultaneous execution"""
         if not self.is_trained:
             raise ValueError("Ensemble must be trained first.")
 
-        all_preds = []
+        tasks = []
         for wrapper in self.wrappers:
-            pred = wrapper.predict(X)
-            if pred is not None:
-                all_preds.append(pred)
+            tasks.append(asyncio.to_thread(wrapper.predict, X))
+        
+        preds_results = await asyncio.gather(*tasks)
+        all_preds = [p for p in preds_results if p is not None]
 
         if not all_preds:
             return None
