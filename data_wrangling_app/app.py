@@ -1774,6 +1774,10 @@ def render_process():
             "remove_outliers": remove_outliers,
         }
 
+        # Save previous data snapshot to compare later
+        if st.session_state.current_data is not None:
+            st.session_state.previous_data = st.session_state.current_data.copy()
+
         with st.spinner("Processing your data..."):
             show_loading_animation("Applying transformations", 5)
 
@@ -1862,13 +1866,14 @@ def render_dashboard():
     st.divider()
 
     if st.session_state.current_data is None:
-        st.warning(
-            " Please upload and process data first!")
+        st.warning(" Please upload and process data first!")
         return
 
-    df = st.session_state.current_data
+    df = st.session_state.current_data.copy()
+    prev_df = st.session_state.get("previous_data")
+    predictions_df = st.session_state.xgboost_predictions_df or st.session_state.ml_predictions
 
-    # Generate dashboard
+    # Build dashboard components
     with st.spinner("Creating dashboard..."):
         dashboard_components = st.session_state.viz_engine.create_dashboard(df)
 
@@ -1876,98 +1881,148 @@ def render_dashboard():
         st.error("Failed to create dashboard")
         return
 
-    # Basic statistics
-    if "basic_stats" in dashboard_components:
-        st.markdown("###  Basic Statistics")
+    stats = dashboard_components.get("basic_stats", {})
+
+    # Neon key statistics block
+    st.markdown("###  Neon Performance Metrics")
+    st.divider()
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Rows", f"{stats.get('total_rows',0):,}")
+    c2.metric("Total Cols", stats.get('total_columns', 0))
+    c3.metric("Missing Values", f"{stats.get('missing_values',0):,}")
+    c4.metric("Duplicate Rows", f"{stats.get('duplicate_rows',0):,}")
+
+    # DataFrame introspection and summary
+    df_info_buf = io.StringIO()
+    df.info(buf=df_info_buf)
+    df_info = df_info_buf.getvalue()
+    df_summary = df.describe(include='all').T.round(4)
+
+    with st.expander("Data Introspection: info(), describe(), frame-level summary"):
+        st.markdown("**DataFrame Info**")
+        st.code(df_info, language='text')
+
+        st.markdown("**DataFrame Describe (all columns)**")
+        st.dataframe(df_summary, use_container_width=True)
+
+        if hasattr(df, 'summary'):
+            try:
+                st.markdown("**DataFrame Summary (if available in pandas extension)**")
+                st.write(df.summary())
+            except Exception:
+                st.warning("df.summary() is not available for this pandas version")
+
+    # Tabbed insights
+    tabs = st.tabs(["Diagnostics", "Visual Insights", "State Comparison", "Predictions"])
+
+    # Diagnostics tab
+    with tabs[0]:
+        st.markdown("### 🔍 Data Diagnostics")
         st.divider()
-        stats = dashboard_components["basic_stats"]
 
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Rows", f"{stats['total_rows']:,}")
-        with col2:
-            st.metric("Total Columns", stats["total_columns"])
-        with col3:
-            st.metric("Missing Values", f"{stats['missing_values']:,}")
-        with col4:
-            st.metric("Memory Usage",
-                      f"{stats['memory_usage'] / 1024 / 1024:.1f} MB")
+        col_a, col_b = st.columns([2, 1])
+        with col_a:
+            st.markdown("#### Data Types")
+            dtype_df = df.dtypes.reset_index()
+            dtype_df.columns = ['column', 'dtype']
+            st.dataframe(dtype_df.astype(str), use_container_width=True)
 
-    # Data quality overview
-    if "data_quality" in dashboard_components:
+        with col_b:
+            st.markdown("#### Basic stats snippet")
+            st.dataframe(df.describe().round(3).T, use_container_width=True)
+
+        st.markdown("#### Correlation Snapshot")
+        if 'correlation' in dashboard_components:
+            st.plotly_chart(dashboard_components['correlation'], use_container_width=True)
+
+    # Visual Insights tab
+    with tabs[1]:
+        st.markdown("### 🎨 Visual Insights")
         st.divider()
-        st.markdown("###  Data Quality Overview")
-        st.divider()
-        st.plotly_chart(
-            dashboard_components["data_quality"], use_container_width=True)
 
-    # Numeric analysis
-    if "numeric_analysis" in dashboard_components:
-        st.divider()
-        st.markdown("###  Numeric Data Analysis")
-        st.divider()
-        numeric_figs = dashboard_components["numeric_analysis"]
+        if 'data_quality' in dashboard_components:
+            st.plotly_chart(dashboard_components['data_quality'], use_container_width=True)
 
-        if "distributions" in numeric_figs:
-            st.plotly_chart(
-                numeric_figs["distributions"], use_container_width=True)
+        numeric_figs = dashboard_components.get('numeric_analysis', {})
+        if numeric_figs.get('distributions') is not None:
+            st.plotly_chart(numeric_figs['distributions'], use_container_width=True)
+        if numeric_figs.get('box_plots') is not None:
+            st.plotly_chart(numeric_figs['box_plots'], use_container_width=True)
 
-        if "box_plots" in numeric_figs:
-            st.plotly_chart(numeric_figs["box_plots"],
-                            use_container_width=True)
-
-    # Categorical analysis
-    if "categorical_analysis" in dashboard_components:
-        st.markdown("###  Categorical Data Analysis")
-        cat_figs = dashboard_components["categorical_analysis"]
-
-        # Display pie chart if available
-        if "pie_chart" in cat_figs:
-            st.plotly_chart(cat_figs["pie_chart"], use_container_width=True)
-
-        # Display bar charts
-        for key, fig in cat_figs.items():
-            if key != "pie_chart":
+        cat_figs = dashboard_components.get('categorical_analysis', {})
+        if cat_figs:
+            for key, fig in cat_figs.items():
                 st.plotly_chart(fig, use_container_width=True)
 
-    # Correlation analysis
-    if "correlation" in dashboard_components:
-        st.divider()
-        st.markdown("###  Correlation & Advanced Insights")
-        st.divider()
-        
-        col_corr, col_adv = st.columns(2)
-        with col_corr:
-            st.plotly_chart(dashboard_components["correlation"], use_container_width=True)
-        
-        with col_adv:
-            # Add notebook visualization components manually
-            st.markdown("#### Marketing & Conversion Benchmarks")
-            if 'converted' in df.columns:
-                fig_lang = st.session_state.viz_engine.plot_conversion_by_language(df)
-                if fig_lang:
-                    st.plotly_chart(fig_lang, use_container_width=True)
-                
-                fig_reach = st.session_state.viz_engine.plot_daily_reach(df)
-                if fig_reach:
-                    st.plotly_chart(fig_reach, use_container_width=True)
-                
-                fig_channel = st.session_state.viz_engine.plot_conversion_by_channel(df)
-                if fig_channel:
-                    st.plotly_chart(fig_channel, use_container_width=True)
-            else:
-                st.info("Upload marketing-tagged data to see conversion benchmarks.")
-
-    # Time series analysis
-    if "time_series" in dashboard_components:
-        st.divider()
-        st.markdown("### Time Series Analysis")
-        st.divider()
-        ts_figs = dashboard_components["time_series"]
+        ts_figs = dashboard_components.get('time_series', {})
         for key, fig in ts_figs.items():
             st.plotly_chart(fig, use_container_width=True)
 
-    # Custom plotting section
+    # State Comparison tab
+    with tabs[2]:
+        st.markdown("### ⚡ State Comparison: Previous vs Current")
+        st.divider()
+
+        if prev_df is None:
+            st.info("No previous dataset snapshot to compare yet. Run Process Data to capture previous state.")
+        else:
+            prev_stats = prev_df.describe(include='all').T.round(4)
+            current_stats = df.describe(include='all').T.round(4)
+
+            st.markdown("#### Summary Comparison")
+            combined = (prev_stats[['mean', 'std']].rename(columns={'mean': 'prev_mean', 'std': 'prev_std'})
+                        .join(current_stats[['mean', 'std']].rename(columns={'mean': 'curr_mean', 'std': 'curr_std'}), how='outer'))
+            st.dataframe(combined, use_container_width=True)
+
+            # Numeric distribution overlay charts
+            num_cols = list(set(prev_df.select_dtypes(include=[np.number]).columns).intersection(df.select_dtypes(include=[np.number]).columns))[:4]
+            if num_cols:
+                st.markdown("#### Numeric distribution overlay")
+                for col in num_cols:
+                    fig = go.Figure()
+                    fig.add_trace(go.Histogram(x=prev_df[col].dropna(), name='previous', opacity=0.5, marker_color='#00FFFF'))
+                    fig.add_trace(go.Histogram(x=df[col].dropna(), name='current', opacity=0.5, marker_color='#DA70D6'))
+                    fig.update_layout(title=f"{col}: Previous vs Current", barmode='overlay', template='plotly_dark', legend=dict(bgcolor='rgba(0,0,0,0.3)'))
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("No numeric columns in common to compare distributions.")
+
+    # Predictions tab
+    with tabs[3]:
+        st.markdown("### 🤖 Prediction Insights")
+        st.divider()
+
+        if predictions_df is None:
+            st.info("No predictions available yet. Run a model and use 'Make Predictions' first.")
+        else:
+            st.markdown("#### Prediction sample")
+            st.dataframe(predictions_df.head(15), use_container_width=True)
+
+            if 'Predictions' in predictions_df.columns:
+                numeric_cols = predictions_df.select_dtypes(include=[np.number]).columns.tolist()
+                possible_actual = [c for c in numeric_cols if c != 'Predictions']
+
+                if possible_actual:
+                    sel_actual = st.selectbox("Actual column", possible_actual, key="pred_actual_col")
+                    actual = predictions_df[sel_actual].fillna(0)
+                    predicted = predictions_df['Predictions'].fillna(0)
+
+                    fig_scatter = go.Figure()
+                    fig_scatter.add_trace(go.Scatter(x=actual, y=predicted, mode='markers', marker=dict(color='#39ff14', opacity=0.8)))
+                    minv, maxv = min(actual.min(), predicted.min()), max(actual.max(), predicted.max())
+                    fig_scatter.add_trace(go.Line(x=[minv, maxv], y=[minv, maxv], line=dict(color='#ff00ff', dash='dash'), name='Perfect Fit'))
+                    fig_scatter.update_layout(title=f"Actual vs Predicted ({sel_actual})", template='plotly_dark')
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+
+                    residuals = actual - predicted
+                    fig_resid = go.Figure(go.Histogram(x=residuals, nbinsx=40, marker=dict(color='#00ffff')))
+                    fig_resid.update_layout(title='Residual Distribution', template='plotly_dark')
+                    st.plotly_chart(fig_resid, use_container_width=True)
+
+                else:
+                    st.warning("Could not find a numeric actual column to compare with predictions.")
+
+    # Custom plotting section remains
     st.divider()
     st.markdown("###  Custom Plots")
     st.divider()
@@ -1975,27 +2030,20 @@ def render_dashboard():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        plot_type = st.selectbox(
-            "Plot Type", ["scatter", "line", "bar", "histogram"])
+        plot_type = st.selectbox("Plot Type", ["scatter", "line", "bar", "histogram"])
 
     with col2:
         x_column = st.selectbox("X-axis Column", df.columns)
 
     with col3:
         if plot_type in ["scatter", "line"]:
-            numeric_cols = df.select_dtypes(
-                include=[np.number]).columns.tolist()
-            y_column = (
-                st.selectbox("Y-axis Column",
-                             numeric_cols) if numeric_cols else None
-            )
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            y_column = (st.selectbox("Y-axis Column", numeric_cols) if numeric_cols else None)
         else:
             y_column = None
 
     if st.button("Generate Custom Plot"):
-        custom_fig = st.session_state.viz_engine.create_custom_plot(
-            df, plot_type, x_column, y_column
-        )
+        custom_fig = st.session_state.viz_engine.create_custom_plot(df, plot_type, x_column, y_column)
         st.plotly_chart(custom_fig, use_container_width=True)
 
 # Database page
