@@ -11,6 +11,12 @@ from utils.email_service import EmailService
 from utils.database import DatabaseManager
 from utils.data_processor import DataProcessor
 from utils.ml_integration import MLIntegration, NeuralNetworkWrapper, sanitize_dataframe_for_xgboost
+from utils.decision_engine import (
+    profile_dataset, ModelRecommender,
+    BootstrapUncertainty, BayesianModelAverager,
+    EpsilonGreedyBandit, DecisionMatrix, DecisionOption,
+    build_voting_ensemble, build_bagging_ensemble, build_boosting_ensemble,
+)
 from utils.ml_finance import MLFinanceUtils, render_rnn_component, render_autoencoder_component
 from config import *
 from sklearn import linear_model
@@ -82,12 +88,12 @@ def load_custom_css():
         background-color: #black;
         color: #white;
     }
-    
+
     /* Sidebar styling */
     .css-1d391kg {
         background-color: #black;
     }
-    
+
     /* Header styling */
     .main-header {
         background: linear-gradient(90deg, #black, #blue);
@@ -97,7 +103,7 @@ def load_custom_css():
         margin-bottom: 2rem;
         animation: fadeIn 3s ease-in;
     }
-    
+
     /* Card styling */
     .metric-card {
         background: linear-gradient(135deg, #black, #blue);
@@ -108,7 +114,7 @@ def load_custom_css():
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         transition: transform 0.10s ease;
     }
-    
+
     .metric-card:hover {
         transform: translateY(-5px);
     }
@@ -371,17 +377,17 @@ def load_custom_css():
         animation: spin 5s linear infinite;
         margin: 20px auto;
     }
-    
+
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
-    
+
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(-20px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    
+
     /* Success message styling */
     .success-message {
         background-color: #27ae60;
@@ -391,12 +397,12 @@ def load_custom_css():
         margin: 1rem 0;
         animation: fadeIn 0.10s ease-in;
     }
-    
+
     /* Progress bar styling */
     .stProgress > div > div > div > div {
         background: linear-gradient(90deg, #000080, #0000CD);
     }
-    
+
     /* Button styling */
     .stButton > button {
         background: linear-gradient(90deg, #000080, #000080);
@@ -406,7 +412,7 @@ def load_custom_css():
         padding: 0.5rem 1rem;
         transition: all 0.5s ease;
     }
-    
+
     .stButton > button:hover {
         transform: scale(1.05);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -477,12 +483,12 @@ def show_transitional_loader():
     LOADER_2 = """<div class="container-orbit"><div class="slice"></div><div class="slice"></div><div class="slice"></div></div><style>.container-orbit { --uib-size: 80px; --uib-speed: 2.5s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--uib-size); width: var(--uib-size); }.slice { position: relative; height: 12px; width: 100%; }.slice::before { content: ""; position: absolute; top: 0; left: 45%; height: 100%; width: 10%; border-radius: 50%; background-color: #334dff; animation: orbit var(--uib-speed) linear infinite; } @keyframes orbit { 0% { transform: translateX(30px) scale(0.7); } 50% { transform: translateX(-30px) scale(0.7); } 100% { transform: translateX(30px) scale(0.7); } }</style>"""
     LOADER_3 = """<div class="container-pulse"><div class="wave"></div><div class="wave"></div><div class="wave"></div></div><style>.container-pulse { display: flex; align-items: flex-end; justify-content: space-between; width: 60px; height: 50px; } .wave { width: 12px; height: 20%; background: #334dff; border-radius: 5px; animation: wave 1.2s ease-in-out infinite; } .wave:nth-child(2) { animation-delay: 0.2s; } .wave:nth-child(3) { animation-delay: 0.4s; } @keyframes wave { 0%, 100% { height: 20%; } 50% { height: 100%; } }</style>"""
     LOADER_4 = """<div class="container-square"><div class="sq"></div></div><style>.container-square { width: 50px; height: 50px; position: relative; } .sq { width: 100%; height: 100%; background: #334dff; animation: rotate 1.5s linear infinite; } @keyframes rotate { 0% { transform: rotate(0deg); border-radius: 50%; } 50% { transform: rotate(180deg); border-radius: 0%; } 100% { transform: rotate(360deg); border-radius: 50%; } }</style>"""
-    
+
     loaders = [LOADER_1, LOADER_2, LOADER_3, LOADER_4]
     idx = st.session_state.get('loader_index', 0)
     loader_html = loaders[idx % len(loaders)]
     st.session_state.loader_index = (idx + 1)
-    
+
     placeholder = st.empty()
     with placeholder.container():
         st.markdown(f'<div style="display: flex; justify-content: center; align-items: center; height: 80vh;">{loader_html}</div>', unsafe_allow_html=True)
@@ -1044,7 +1050,7 @@ def render_header():
 }
 
 </style>
-    
+
                 """,
         unsafe_allow_html=True,
     )
@@ -1067,12 +1073,13 @@ def render_sidebar():
                 "Feature Engineering",
                 "Machine Learning",
                 "Ensemble Workflows",
+                "Decision Making",
                 "Dashboard",
                 "Database",
                 "Share Results",
             ],
             icons=["house", "upload", "gear", "sliders",
-                   "robot", "layers", "bar-chart", "database", "envelope"],
+                   "robot", "layers", "diagram-3", "bar-chart", "database", "envelope"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -1096,7 +1103,7 @@ def render_sidebar():
             company_name = st.text_input("Company Name", st.session_state.company_name if 'company_name' in st.session_state else "")
             location = st.text_input("Location (City/State)", st.session_state.user_location if 'user_location' in st.session_state else "")
             country = st.text_input("Country", st.session_state.user_country if 'user_country' in st.session_state else "")
-            
+
             if st.button("Save Profile"):
                 st.session_state.user_name = user_name
                 st.session_state.user_email = user_email
@@ -1255,15 +1262,15 @@ def render_home():
     # Featured sections with Glass Cards
     st.markdown("### Platform Capabilities")
     f_col1, f_col2, f_col3 = st.columns(3)
-    
+
     with f_col1:
         render_glass_card("Upload Data", '<svg viewBox="0 0 640 512" height="1em"><path d="M144 480C64.5 480 0 415.5 0 336c0-62.8 40.2-116.2 96.2-135.9C105.4 112.9 181.8 48 272 48c90.1 0 166.5 64.9 175.7 152.1C503.8 219.8 544 273.2 544 336c0 79.5-64.5 144-144 144H144zM224 338.7V384c0 8.8 7.2 16 16 16h64c8.8 0 16-7.2 16-16v-45.3h37.3c9.4 0 14.1-11.4 7.5-18.1L301.5 257.3c-4.1-4.1-10.8-4.1-14.9 0L223.3 320.6c-6.7 6.7-1.9 18.1 7.5 18.1H224z"/></svg>', rotation=-15)
         render_legacy_tooltip("Request for machine learning prediction models to be used on historical datasets. send a direct email for assistance")
-        
+
     with f_col2:
         render_glass_card("Process Data", '<svg viewBox="0 0 512 512" height="1em"><path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-75.6 68.1c.7 5.4 1.1 10.9 1.1 16.5s-.4 11.1-1.1 16.5l75.6 68.1c6.9 6.2 9.6 15.9 6.4 24.6l-44.6 122.6c-3.2 8.7-11.9 14.3-21.2 13.1l-100.3-13.4c-18.4 15.3-40.1 27.3-64 34.8V448c0 10.6-8.6 19.2-19.2 19.2s-19.2-8.6-19.2-19.2V439.1c-23.9-7.5-45.6-19.5-64-34.8l-100.3 13.4c-9.3 1.2-18-4.4-21.2-13.1L16.1 282c-3.2-8.7-.5-18.4 6.4-24.6l75.6-68.1c-.7-5.4-1.1-10.9-1.1-16.5s.4-11.1 1.1-16.5L22.5 88.2c-6.9-6.2-9.6-15.9-6.4-24.6L60.7-59c3.2-8.7 11.9-14.3 21.2-13.1l100.3 13.4C200.6-75 222.3-87 246.2-94.5V-160c0-10.6 8.6-19.2 19.2-19.2s19.2 8.6 19.2 19.2V-94.5c23.9 7.5 45.6 19.5 64 34.8l100.3-13.4c9.3-1.2 18 4.4 21.2 13.1l44.6 122.6zM256 160a96 96 0 1 0 0 192 96 96 0 1 0 0-192z"/></svg>', rotation=5)
         render_legacy_tooltip("Request for detailed data exploratory analysis using correlated features from historical or present datasets.")
-        
+
     with f_col3:
         render_glass_card("Analyze & ML", '<svg viewBox="0 0 576 512" height="1em"><path d="M304 240V16.6c0-9 7-16.6 16-16.6C443.7 0 544 100.3 544 224c0 9-7.6 16-16.6 16H304zM32 272C32 150.7 122.1 50.3 239 34.3c9.2-1.3 17 6.1 17 15.4V288L412.5 444.5c6.7 6.7 6.2 17.7-1.5 23.1C371.8 495.6 325.9 512 276.5 512 141.9 512 32 404.1 32 272zm526.4 16.7c7.3 7.6 6.7 19.8-1.5 26.1L400.3 435.5 288 323.2V272h231c9 0 16.5 7.1 17.4 16.7z"/></svg>', rotation=25)
         render_legacy_tooltip("Request for detailed visualizations with feature engineering and machine learning algorithms implemented on datasets.")
@@ -1596,7 +1603,7 @@ header .slider {
 }
 
 </style>
-    
+
                 """,
             unsafe_allow_html=True,
         )
@@ -1609,7 +1616,7 @@ def render_contract_section():
     """Render the contract selection and payment section"""
     st.markdown('<div id="contract-section"></div>', unsafe_allow_html=True)
     st.markdown("## 📜 Service Contract & Plan Selection")
-    
+
     if 'user_email' not in st.session_state or not st.session_state.user_email:
         st.warning("Please fill in your User Information in the sidebar before proceeding with a contract.")
         return
@@ -1621,16 +1628,16 @@ def render_contract_section():
                 <p>Choose the option that best fits your business needs. All plans include 24/7 priority support.</p>
             </div>
         """, unsafe_allow_html=True)
-        
+
         plans = {
             "Starter (R299)": {"price": "299", "name": "DWAP Starter"},
             "Professional (R799)": {"price": "799", "name": "DWAP Professional"},
             "Enterprise (R2499)": {"price": "2499", "name": "DWAP Enterprise AI"}
         }
-        
+
         selected_plan_name = st.radio("Available Plans", list(plans.keys()), key="contract_plan_radio")
         plan_details = plans[selected_plan_name]
-        
+
         # User details check for contract
         st.markdown("### Contract Details")
         col_c1, col_c2 = st.columns(2)
@@ -1644,12 +1651,12 @@ def render_contract_section():
         st.markdown("---")
         st.markdown(f"**Selected Plan:** {plan_details['name']}")
         st.markdown(f"**Amount Due:** R{plan_details['price']}")
-        
+
         col_pay, _ = st.columns([1, 2])
         with col_pay:
             paypal_link = f"https://www.paypal.com/paypalme/dunduonline/{plan_details['price']}"
             st.link_button("💳 Proceed to PayPal Payment", paypal_link, type="primary", use_container_width=True)
-        
+
         st.caption("Note: clicking the button above will redirect you to PayPal to complete the transaction.")
 
 # Upload data page
@@ -2097,7 +2104,7 @@ def render_database():
                         <span class="icon-animated"> </span> Dataset saved with ID: {dataset_id}
                     </div>
                 """, unsafe_allow_html=True)
-                
+
                 # Log this save operation
                 user_context = {
                     'email': st.session_state.user_email,
@@ -2154,7 +2161,7 @@ def render_database():
                 with col3:
                     st.write(f"**Rows:** {ds['row_count']} | **Cols:** {ds['column_count']}")
                     st.write(f"**Type:** {ds.get('file_type') or 'N/A'}")
-                
+
                 st.divider()
                 # Management buttons
                 m_col1, m_col2, m_col3 = st.columns(3)
@@ -2175,7 +2182,7 @@ def render_database():
                         if st.session_state.db_manager.delete_dataset(ds['id']):
                             st.success(f"Dataset {ds['id']} deleted!")
                             st.rerun()
-                
+
                 # Show history
                 if st.checkbox("Show Edit History", key=f"hist_{ds['id']}"):
                     history = st.session_state.db_manager.get_processing_history(ds['id'])
@@ -2605,7 +2612,7 @@ def render_machine_learning():
 
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=test_size, random_state=42)
-                
+
                 # Convert to numpy arrays to avoid dtype issues with XGBoost
                 X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
                 X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
@@ -2710,7 +2717,7 @@ def render_machine_learning():
 
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.2, random_state=42)
-                
+
                 # Convert to numpy arrays to avoid dtype issues with XGBoost
                 X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
                 X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
@@ -2859,7 +2866,7 @@ def render_machine_learning():
                                for x in hidden_layers.split(','))
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.2, random_state=42)
-                
+
                 # Convert to numpy arrays to avoid dtype issues with XGBoost
                 X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
                 X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
@@ -2879,7 +2886,7 @@ def render_machine_learning():
                                              learning_rate_init=learning_rate, activation=activation, random_state=42)
                         model.fit(X_train_scaled, y_train)
                         y_pred = model.predict(X_test_scaled)
-                        
+
                         st.markdown("#### Model Performance")
                         col1, col2 = st.columns(2)
                         with col1: st.metric("MSE", f"{mean_squared_error(y_test, y_pred):.4f}")
@@ -2891,7 +2898,7 @@ def render_machine_learning():
                                               learning_rate_init=learning_rate, activation=activation, random_state=42)
                         model.fit(X_train_scaled, y_train_enc)
                         y_pred = model.predict(X_test_scaled)
-                        
+
                         st.markdown("#### Model Performance")
                         col1, col2 = st.columns(2)
                         with col1: st.metric("Accuracy", f"{accuracy_score(y_test_enc, y_pred):.2%}")
@@ -2901,16 +2908,16 @@ def render_machine_learning():
                     st.info(f"Using deep Neural Network with {len(hidden)} hidden layers: {hidden}")
                     input_nodes = X_train_scaled.shape[1]
                     output_nodes = 1 if task_type == "Regression" else len(np.unique(y))
-                    
+
                     model = NeuralNetworkWrapper(input_nodes, output_nodes, list(hidden), learning_rate)
-                    
+
                     if task_type == "Classification":
                         le = LabelEncoder()
                         y_train_enc = le.fit_transform(y_train)
                         y_test_enc = le.transform(y_test)
                         model.fit_dataset(X_train_scaled, y_train_enc, epochs=10)
                         y_pred = model.predict_classes(X_test_scaled)
-                        
+
                         st.markdown("#### Model Performance (Deep NN)")
                         col1, col2 = st.columns(2)
                         with col1: st.metric("Accuracy", f"{accuracy_score(y_test_enc, y_pred):.2%}")
@@ -2966,16 +2973,16 @@ def render_machine_learning():
                                              value=0.1, key="xgb_lr",
                                              help="How much each tree contributes. Lower values need more trees but can prevent overfitting."
             )
-        
+
         xgb_sub_tab1, xgb_sub_tab2 = st.tabs(["🚀 Training & Simple Prediction", "🌊 Model Lake Browser"])
-        
+
         with xgb_sub_tab1:
             col_train, col_pred = st.columns(2)
-            
+
             with col_train:
                 st.markdown("#### 🎯 Train Your Model")
                 st.write("Click below to train advanced ML models. We'll create 3 different versions of your data and train models using XGBoost, PyTorch, and Transformers. Only high-quality models (< 10% error) will be saved!")
-                
+
                 if st.button("🚀 Train Advanced ML Models", key="train_xgb", type="primary"):
                     if xgb_features:
                         with st.spinner("Training XGBoost model..."):
@@ -2985,7 +2992,7 @@ def render_machine_learning():
                                 'n_estimators': n_estimators,
                                 'random_state': 42
                             }
-    
+
                             # Use asyncio.run for the newly async training method
                             result = asyncio.run(st.session_state.ml_integration.train_xgboost_model(
                                 df, xgb_target, xgb_features,
@@ -3002,13 +3009,13 @@ def render_machine_learning():
 
                             # Display results for each dataset/model
                             st.markdown("#### Training Results")
-                            
+
                             results = result.get('results', {})
                             passed_count = result.get('passed_models', 0)
                             total_datasets = result.get('total_datasets', 0)
-                            
+
                             st.info(f"✅ {passed_count} out of {total_datasets} models passed error testing (< 10% error)")
-                            
+
                             for model_name, model_result in results.items():
                                 if 'model_id' in model_result:
                                     st.success(f"🎯 {model_name.upper()}: Model saved with {model_result['error_results']['error_rate']:.2%} error")
@@ -3056,7 +3063,7 @@ def render_machine_learning():
         with xgb_sub_tab2:
             st.markdown("### 🌊 Your Model Lake - Saved AI Models")
             st.info("🎓 **What is this?** Your personal collection of trained AI models! We only save models that are accurate enough (< 10% error) for real-world use. Select multiple models to see how they all predict on your data.")
-            
+
             models_in_lake = st.session_state.ml_integration.list_models_in_lake()
             if not models_in_lake:
                 st.warning("🌟 No models saved yet! Train some models first using the tab on the left.")
@@ -3072,24 +3079,24 @@ def render_machine_learning():
                     'Timestamp': m.get('timestamp', 'N/A')[:19]  # Truncate ISO format
                 } for m in models_in_lake])
                 st.dataframe(models_df, use_container_width=True)
-                
+
                 # Model selection for inference
                 selected_models = st.multiselect(
                     "Select models for inference:",
                     [m['model_id'] for m in models_in_lake],
                     key="selected_lake_models"
                 )
-                
+
                 if selected_models and st.button("🚀 Run Inference on Selected Models", key="lake_inference"):
                     with st.spinner("Running inference across selected models..."):
                         inference_results = asyncio.run(
                             st.session_state.ml_integration.make_predictions_multi(df, selected_models)
                         )
-                        
+
                         if inference_results is not None:
                             st.markdown("#### Multi-Model Inference Results")
                             st.dataframe(inference_results.head(20), use_container_width=True)
-                            
+
                             # Download results
                             csv = inference_results.to_csv(index=False)
                             st.download_button(
@@ -3101,11 +3108,11 @@ def render_machine_learning():
                             )
                         else:
                             st.error("Inference failed. Check model compatibility.")
-                
+
                 selected_ids = st.multiselect("Select Models for Lake Prediction",
                                              [m['model_id'] for m in models_in_lake],
                                              key="lake_select")
-                
+
                 if st.button("🚀 Run Lake Predictions", key="run_lake"):
                     if not selected_ids:
                         st.error("Please select at least one model.")
@@ -3115,7 +3122,7 @@ def render_machine_learning():
                             st.session_state.lake_predictions = lake_preds
                             st.success(f"Generated predictions from {len(selected_ids)} models!")
                             st.dataframe(lake_preds.head(20), use_container_width=True)
-                            
+
                             # Download
                             csv_lake = lake_preds.to_csv(index=False)
                             st.download_button("Download Lake Results", csv_lake, "lake_results.csv", "text/csv")
@@ -3184,12 +3191,12 @@ def render_machine_learning():
     with tab7:
         st.markdown("### Financial Machine Learning Components")
         st.info("Advanced models for time series prediction and dimensionality reduction.")
-        
+
         sub_tab1, sub_tab2 = st.tabs(["RNN/LSTM/GRU", "Autoencoders"])
-        
+
         with sub_tab1:
             render_rnn_component()
-            
+
         with sub_tab2:
             render_autoencoder_component()
 
@@ -3205,7 +3212,7 @@ def render_ensemble_workflows():
 
     df = st.session_state.current_data.copy()
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    
+
     # Research custom models
     custom_models = get_available_custom_models()
     if not any(custom_models.values()):
@@ -3213,12 +3220,12 @@ def render_ensemble_workflows():
         return
 
     st.markdown("### 🛠️ Configure Ensemble")
-    
+
     col1, col2 = st.columns(2)
     with col1:
         target_var = st.selectbox("Target Variable", numeric_cols, key="ens_target")
         features_var = st.multiselect("Feature Variables", [c for c in numeric_cols if c != target_var], key="ens_features")
-    
+
     with col2:
         ensemble_method = st.selectbox("Ensemble Strategy", ["Voting (Average)", "Stacking (Meta-Learner)"])
         task_type = st.radio("Task Type", ["Regression", "Classification"], horizontal=True)
@@ -3226,9 +3233,9 @@ def render_ensemble_workflows():
     st.markdown("#### 🤖 Select Models for Ensemble")
     selected_ml = st.multiselect("Machine Learning Models", custom_models.get('machine_learning', []), default=custom_models.get('machine_learning', [])[:2])
     selected_nn = st.multiselect("Neural Network Models", custom_models.get('neural_network', []), default=custom_models.get('neural_network', [])[:1])
-    
+
     all_selected = selected_ml + selected_nn
-    
+
     if st.button("🚀 Execute Ensemble Workflow", type="primary"):
         if not features_var:
             st.error("Please select at least one feature variable.")
@@ -3237,7 +3244,7 @@ def render_ensemble_workflows():
         else:
             # Show premium loader
             show_transitional_loader()
-            
+
             async def run_ensemble():
                 with st.spinner("Building and training ensemble..."):
                     try:
@@ -3247,10 +3254,10 @@ def render_ensemble_workflows():
                             wrappers.append(CustomModelWrapper(model_name, "machine_learning", model_type=task_type.lower()))
                         for model_name in selected_nn:
                             wrappers.append(CustomModelWrapper(model_name, "neural_network", model_type=task_type.lower()))
-                        
+
                         # Engine with async training
                         engine = EnsembleEngine(wrappers)
-                        
+
                         # Split data with validation
                         # Filter valid feature columns
                         valid_features = [col for col in features_var if col in df.columns and col != target_var]
@@ -3270,28 +3277,28 @@ def render_ensemble_workflows():
                             y = le.fit_transform(y.fillna('Unknown'))
 
                         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-                        
+
                         # Convert to numpy arrays to avoid dtype issues
                         X_train = np.asarray(X_train.values, dtype=np.float64, order='C')
                         X_test = np.asarray(X_test.values, dtype=np.float64, order='C')
-                        
+
                         # Async fit
                         await engine.fit(X_train, y_train)
-                        
+
                         # Async predict
                         method = "voting" if "Voting" in ensemble_method else "stacking"
                         y_pred = await engine.predict(X_test, method=method)
-                        
+
                         # Metrics
                         st.success("Ensemble Workflow Completed Successfully!")
-                        
+
                         m_col1, m_col2, m_col3 = st.columns(3)
                         if task_type == "Regression":
                             mse = mean_squared_error(y_test, y_pred)
                             r2 = r2_score(y_test, y_pred)
                             m_col1.metric("Ensemble R²", f"{r2:.4f}")
                             m_col2.metric("Ensemble MSE", f"{mse:.4f}")
-                            
+
                             # Comparison Chart
                             fig = go.Figure()
                             fig.add_trace(go.Scatter(x=y_test, y=y_pred, mode='markers', name='Ensemble Predictions'))
@@ -3301,7 +3308,7 @@ def render_ensemble_workflows():
                         else:
                             acc = accuracy_score(y_test, y_pred)
                             m_col1.metric("Ensemble Accuracy", f"{acc:.2%}")
-                            
+
                             # Confusion Matrix
                             cm = confusion_matrix(y_test, y_pred)
                             fig_cm = px.imshow(cm, text_auto=True, title="Ensemble Confusion Matrix", template="plotly_dark")
@@ -3309,8 +3316,300 @@ def render_ensemble_workflows():
 
                     except Exception as e:
                         st.error(f"Ensemble execution failed: {str(e)}")
-            
+
             asyncio.run(run_ensemble())
+
+
+# Decision Making page
+def render_decision_making():
+    st.markdown("## 🧠 Decision Making")
+    st.caption(
+        "Use probabilistic reasoning, ensembles, uncertainty quantification "
+        "and utility-based decision matrices to choose the right model for "
+        "your data."
+    )
+    st.divider()
+
+    if st.session_state.current_data is None:
+        st.warning("Please upload and process data first!")
+        return
+
+    df = st.session_state.current_data.copy()
+    all_cols = df.columns.tolist()
+    target = st.selectbox(
+        "🎯 Target column (optional, leave blank for unsupervised profile)",
+        options=["<none>"] + all_cols, index=0, key="dm_target"
+    )
+    target_col = None if target == "<none>" else target
+
+    profile = profile_dataset(df, target_col)
+
+    tab_profile, tab_recommend, tab_uncert, tab_bma, tab_bandit, tab_matrix = st.tabs([
+        "📊 Data Profile",
+        "🎯 Model Recommender",
+        "📈 Uncertainty",
+        "⚖️ Bayesian Averaging",
+        "🎰 Bandit Selection",
+        "🧮 Decision Matrix",
+    ])
+
+    with tab_profile:
+        st.markdown("### Dataset Profile")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Rows", f"{profile.n_rows:,}")
+        c2.metric("Features", f"{profile.n_features}")
+        c3.metric("Task", profile.task_type)
+        c4.metric("Missing", f"{profile.missing_ratio:.1%}")
+        st.json(profile.to_dict())
+
+    with tab_recommend:
+        st.markdown("### Probabilistic Model Recommendations")
+        st.write(
+            "Recommendations are scored using rules derived from the "
+            "`probablistic_reasoning` and `utility_function_summary` notes "
+            "in `decision-making-ML/`."
+        )
+        top_k = st.slider("How many candidates", 3, 8, 5, key="dm_topk")
+        recs = ModelRecommender().recommend(profile, top_k=top_k)
+        rec_df = pd.DataFrame([{
+            "Model": r.name, "Score": round(r.score, 3), "Rationale": r.rationale
+        } for r in recs])
+        st.dataframe(rec_df, use_container_width=True)
+        if recs:
+            st.success(f"Top recommendation: **{recs[0].name}** "
+                       f"(score {recs[0].score:.2f})")
+
+    with tab_uncert:
+        st.markdown("### Bootstrap Prediction Intervals")
+        if target_col is None or profile.task_type != "regression":
+            st.info("Select a numeric regression target to compute prediction "
+                    "intervals.")
+        else:
+            feat_options = [c for c in df.select_dtypes(include=[np.number]).columns
+                            if c != target_col]
+            features = st.multiselect("Features", feat_options,
+                                      default=feat_options[:5], key="dm_unc_feat")
+            n_boot = st.slider("Bootstrap rounds", 10, 100, 30, key="dm_unc_b")
+            alpha = st.slider("Interval width (alpha)", 0.01, 0.5, 0.05,
+                              key="dm_unc_a")
+            if st.button("Compute intervals", key="dm_unc_btn") and features:
+                X = df[features].fillna(0).values
+                y = df[target_col].fillna(df[target_col].mean()).values
+                with st.spinner("Fitting bootstrap ensemble..."):
+                    bu = BootstrapUncertainty(
+                        base_estimator=Ridge(), n_bootstrap=n_boot
+                    ).fit(X, y)
+                    out = bu.predict(X, alpha=alpha)
+                res = pd.DataFrame({
+                    "actual": y,
+                    "mean_pred": out["mean"],
+                    "lower": out["lower"],
+                    "upper": out["upper"],
+                    "std": out["std"],
+                }).head(200)
+                st.dataframe(res, use_container_width=True)
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(y=res["actual"], name="actual",
+                                         mode="markers"))
+                fig.add_trace(go.Scatter(y=res["mean_pred"], name="prediction",
+                                         mode="lines"))
+                fig.add_trace(go.Scatter(y=res["upper"], name="upper",
+                                         mode="lines", line=dict(dash="dot")))
+                fig.add_trace(go.Scatter(y=res["lower"], name="lower",
+                                         mode="lines", line=dict(dash="dot"),
+                                         fill="tonexty"))
+                st.plotly_chart(fig, use_container_width=True)
+
+    with tab_bma:
+        st.markdown("### Bayesian Model Averaging")
+        st.write(
+            "Combine candidate models with softmax(-loss/T) weights derived "
+            "from quick cross-validation. Lower temperature concentrates "
+            "weight on the best model."
+        )
+        if target_col is None or profile.task_type == "unknown":
+            st.info("Select a target column first.")
+        else:
+            feat_options = [c for c in df.select_dtypes(include=[np.number]).columns
+                            if c != target_col]
+            features = st.multiselect("Features", feat_options,
+                                      default=feat_options[:5], key="dm_bma_feat")
+            temperature = st.slider("Temperature", 0.01, 5.0, 1.0, 0.01,
+                                    key="dm_bma_t")
+            task = "classification" if profile.task_type in ("binary", "multiclass") \
+                else "regression"
+            candidate_names = (["logistic_regression", "random_forest",
+                                "gradient_boosting"] if task == "classification"
+                               else ["ridge", "random_forest", "gradient_boosting"])
+            if st.button("Compute weights & ensemble prediction",
+                         key="dm_bma_btn") and features:
+                X = df[features].fillna(0).values
+                y_raw = df[target_col].dropna()
+                if task == "classification":
+                    y = LabelEncoder().fit_transform(y_raw.astype(str))
+                    X = X[: len(y)]
+                    scoring = "accuracy"
+                else:
+                    y = y_raw.values
+                    X = X[: len(y)]
+                    scoring = "r2"
+                losses: Dict[str, float] = {}
+                preds: Dict[str, np.ndarray] = {}
+                from utils.decision_engine import _CLF_FAMILY, _REG_FAMILY
+                family = _CLF_FAMILY if task == "classification" else _REG_FAMILY
+                with st.spinner("Cross-validating candidates..."):
+                    for name in candidate_names:
+                        model = family[name]()
+                        try:
+                            cv = cross_val_score(model, X, y, cv=3,
+                                                 scoring=scoring).mean()
+                        except Exception as exc:
+                            st.warning(f"{name} CV failed: {exc}")
+                            continue
+                        losses[name] = -float(cv) if scoring == "r2" \
+                            else (1.0 - float(cv))
+                        model.fit(X, y)
+                        preds[name] = model.predict(X).astype(float)
+                if losses:
+                    bma = BayesianModelAverager(temperature=temperature)
+                    weights = bma.fit_weights(losses)
+                    ensemble_pred = bma.predict(preds)
+                    weight_df = pd.DataFrame({
+                        "Model": list(weights.keys()),
+                        "Weight": [round(w, 4) for w in weights.values()],
+                        "Loss": [round(losses[k], 4) for k in weights.keys()],
+                    }).sort_values("Weight", ascending=False)
+                    st.dataframe(weight_df, use_container_width=True)
+                    fig = px.bar(weight_df, x="Model", y="Weight",
+                                 title="Posterior model weights",
+                                 template="plotly_dark")
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption("First 20 ensemble predictions:")
+                    st.write(np.round(ensemble_pred[:20], 4))
+
+    with tab_bandit:
+        st.markdown("### Epsilon-Greedy Bandit Selection")
+        st.write(
+            "Each candidate model is an arm. The bandit explores with "
+            "probability epsilon and exploits the best-known arm otherwise. "
+            "State persists across this session."
+        )
+        arms_default = ["logistic_regression", "random_forest",
+                        "gradient_boosting", "knn"] \
+            if profile.task_type in ("binary", "multiclass") \
+            else ["ridge", "random_forest", "gradient_boosting", "knn"]
+        epsilon = st.slider("Epsilon (exploration)", 0.0, 1.0, 0.1, 0.05,
+                            key="dm_bandit_eps")
+        if "dm_bandit" not in st.session_state \
+                or st.session_state.get("dm_bandit_task") != profile.task_type:
+            st.session_state.dm_bandit = EpsilonGreedyBandit(
+                arms_default, epsilon=epsilon)
+            st.session_state.dm_bandit_task = profile.task_type
+        bandit: EpsilonGreedyBandit = st.session_state.dm_bandit
+        bandit.epsilon = epsilon
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("Pull arm (run candidate)", key="dm_bandit_pull") \
+                    and target_col is not None and profile.task_type != "unknown":
+                arm = bandit.select_arm()
+                feat_options = [c for c in df.select_dtypes(include=[np.number]).columns
+                                if c != target_col]
+                X = df[feat_options].fillna(0).values
+                y_raw = df[target_col].dropna()
+                task = "classification" \
+                    if profile.task_type in ("binary", "multiclass") \
+                    else "regression"
+                if task == "classification":
+                    y = LabelEncoder().fit_transform(y_raw.astype(str))
+                    scoring = "accuracy"
+                else:
+                    y = y_raw.values
+                    scoring = "r2"
+                X = X[: len(y)]
+                from utils.decision_engine import _CLF_FAMILY, _REG_FAMILY
+                family = _CLF_FAMILY if task == "classification" else _REG_FAMILY
+                try:
+                    reward = float(cross_val_score(
+                        family[arm](), X, y, cv=3, scoring=scoring).mean())
+                except Exception as exc:
+                    st.error(f"Arm {arm} failed: {exc}")
+                    reward = 0.0
+                bandit.update(arm, reward)
+                st.info(f"Pulled **{arm}** → reward = {reward:.4f}")
+        with col_b:
+            if st.button("Reset bandit", key="dm_bandit_reset"):
+                st.session_state.dm_bandit = EpsilonGreedyBandit(
+                    arms_default, epsilon=epsilon)
+                st.rerun()
+
+        state = bandit.state()
+        state_df = pd.DataFrame([
+            {"Arm": a, "Pulls": int(v["count"]), "Mean reward": round(v["value"], 4)}
+            for a, v in state.items()
+        ]).sort_values("Mean reward", ascending=False)
+        st.dataframe(state_df, use_container_width=True)
+        if not state_df.empty and state_df["Pulls"].sum() > 0:
+            best = state_df.iloc[0]["Arm"]
+            st.success(f"Best arm so far: **{best}**")
+
+    with tab_matrix:
+        st.markdown("### Utility-Based Decision Matrix")
+        st.write(
+            "Score candidate options against attributes (e.g. accuracy, "
+            "interpretability, training speed) and weight each attribute by "
+            "its importance to your project. The option with the highest "
+            "expected utility is recommended."
+        )
+        st.markdown("#### Step 1 — Define options")
+        default_opts = pd.DataFrame([
+            {"option": "LogisticRegression", "accuracy": 0.82,
+             "interpretability": 0.95, "speed": 0.90, "robustness": 0.70},
+            {"option": "RandomForest", "accuracy": 0.90,
+             "interpretability": 0.55, "speed": 0.60, "robustness": 0.85},
+            {"option": "GradientBoosting", "accuracy": 0.93,
+             "interpretability": 0.45, "speed": 0.40, "robustness": 0.85},
+            {"option": "NeuralNetwork", "accuracy": 0.91,
+             "interpretability": 0.20, "speed": 0.30, "robustness": 0.65},
+        ])
+        opts_df = st.data_editor(default_opts, num_rows="dynamic",
+                                 use_container_width=True, key="dm_matrix_opts")
+
+        st.markdown("#### Step 2 — Assign importance weights")
+        attr_cols = [c for c in opts_df.columns if c != "option"]
+        weight_inputs: Dict[str, float] = {}
+        wcols = st.columns(max(1, len(attr_cols)))
+        for i, attr in enumerate(attr_cols):
+            with wcols[i % len(wcols)]:
+                weight_inputs[attr] = st.slider(
+                    f"Weight: {attr}", 0.0, 1.0, 0.25, 0.05,
+                    key=f"dm_matrix_w_{attr}")
+
+        if st.button("Compute decision matrix", key="dm_matrix_btn"):
+            options = [
+                DecisionOption(
+                    name=str(row["option"]),
+                    attributes={a: float(row[a]) for a in attr_cols},
+                )
+                for _, row in opts_df.iterrows()
+                if pd.notna(row.get("option"))
+            ]
+            if not options:
+                st.warning("Add at least one option.")
+            else:
+                matrix = DecisionMatrix(weight_inputs)
+                scored = matrix.score(options)
+                st.dataframe(scored, use_container_width=True)
+                fig = px.bar(scored, x="option", y="utility",
+                             color="recommended",
+                             title="Expected utility per option",
+                             template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
+                winner = scored.iloc[0]
+                st.success(
+                    f"Recommended option: **{winner['option']}** "
+                    f"(utility {winner['utility']:.3f})"
+                )
 
 
 def main():
@@ -3347,6 +3646,8 @@ def main():
         render_machine_learning()
     elif selected_page == "Ensemble Workflows":
         render_ensemble_workflows()
+    elif selected_page == "Decision Making":
+        render_decision_making()
     elif selected_page == "Dashboard":
         render_dashboard()
     elif selected_page == "Database":

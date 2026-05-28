@@ -642,6 +642,94 @@ class AsyncMLTrainer:
         return model
 
 
+class ModelErrorTester:
+    """
+    Tests trained model errors and decides whether a model passes an
+    acceptance threshold. Used by MLIntegration's model lake to decide
+    which models are worth persisting.
+    """
+
+    def __init__(self, threshold: float=0.10):
+        # Acceptable error rate (default 10%)
+        self.threshold = threshold
+
+    def test_regression_error(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, Any]:
+        """
+        Evaluate a regression model. The headline `error_rate` is a
+        normalised RMSE (RMSE divided by the range of `y_true`) so that
+        it falls in roughly the same [0, 1] band as a classification
+        error rate and can be compared against `self.threshold`.
+        """
+        y_true = np.asarray(y_true, dtype=np.float64).ravel()
+        y_pred = np.asarray(y_pred, dtype=np.float64).ravel()
+
+        if y_true.size == 0 or y_true.size != y_pred.size:
+            return {
+                'passes_test': False,
+                'error_rate': 1.0,
+                'reason': 'empty or mismatched arrays',
+                'threshold': self.threshold,
+            }
+
+        mse = float(mean_squared_error(y_true, y_pred))
+        rmse = float(np.sqrt(mse))
+        mae = float(mean_absolute_error(y_true, y_pred))
+        try:
+            r2 = float(r2_score(y_true, y_pred))
+        except Exception:
+            r2 = float('nan')
+
+        y_range = float(np.max(y_true) - np.min(y_true))
+        if y_range > 0:
+            normalised_rmse = rmse / y_range
+        else:
+            denom = float(np.mean(np.abs(y_true))) or 1.0
+            normalised_rmse = rmse / denom
+
+        error_rate = float(min(max(normalised_rmse, 0.0), 1.0))
+        return {
+            'passes_test': error_rate < self.threshold,
+            'error_rate': error_rate,
+            'threshold': self.threshold,
+            'rmse': rmse,
+            'mae': mae,
+            'mse': mse,
+            'r2': r2,
+            'task_type': 'regression',
+        }
+
+    def test_classification_error(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, Any]:
+        """
+        Evaluate a classification model. `error_rate = 1 - accuracy`.
+        """
+        y_true = np.asarray(y_true).ravel()
+        y_pred = np.asarray(y_pred).ravel()
+
+        if y_true.size == 0 or y_true.size != y_pred.size:
+            return {
+                'passes_test': False,
+                'error_rate': 1.0,
+                'reason': 'empty or mismatched arrays',
+                'threshold': self.threshold,
+            }
+
+        acc = float(accuracy_score(y_true, y_pred))
+        error_rate = float(1.0 - acc)
+        try:
+            f1 = float(f1_score(y_true, y_pred, average='weighted', zero_division=0))
+        except Exception:
+            f1 = float('nan')
+
+        return {
+            'passes_test': error_rate < self.threshold,
+            'error_rate': error_rate,
+            'threshold': self.threshold,
+            'accuracy': acc,
+            'f1_weighted': f1,
+            'task_type': 'classification',
+        }
+
+
 class MLIntegration:
     """Comprehensive ML Integration with XGBoost, PyTorch, Transformers and Linear Models"""
 
