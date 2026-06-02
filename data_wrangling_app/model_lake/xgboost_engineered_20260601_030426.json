@@ -1,0 +1,29 @@
+{
+    "model_id": "engineered_20260601_030426",
+    "dataset_name": "engineered",
+    "task_type": "regression",
+    "target_col": "cancer",
+    "feature_cols": [
+        "population"
+    ],
+    "error_metrics": {
+        "passes_test": true,
+        "error_rate": 0.04933468191879791,
+        "threshold": 0.1,
+        "rmse": 11.889658342430296,
+        "mae": 7.897372581919686,
+        "mse": 141.36397549972236,
+        "r2": 0.9387381745027726,
+        "task_type": "regression"
+    },
+    "params": {
+        "max_depth": 3,
+        "learning_rate": 0.1,
+        "n_estimators": 100,
+        "random_state": 42
+    },
+    "timestamp": "2026-06-01T03:04:26.728495",
+    "autoencoder_used": false,
+    "scaler": null,
+    "poly_features": null
+}

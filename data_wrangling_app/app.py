@@ -3028,37 +3028,271 @@ def render_machine_learning():
                             st.error(f"Error: {result['error']}")
 
         with col_pred:
-            if st.button(" Make Predictions", key="xgb_predict"):
-                if xgb_features:
-                    with st.spinner("Making predictions..."):
-                        predictions_df = st.session_state.ml_integration.make_predictions(
-                            df, xgb_features, model_name='xgboost'
-                        )
+            st.markdown("#### 🔮 Quick Predictions")
+            st.write("Pick a model, target, and features — we'll train on the fly and predict immediately. No need to wait for a saved model.")
 
-                        if predictions_df is not None:
-                            st.session_state.xgboost_predictions_df = predictions_df
-                            st.markdown("""
-                                <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
-                                    <span class="icon-animated"> </span> Predictions generated!
-                                </div>
-                            """, unsafe_allow_html=True)
+            pred_model_name = st.selectbox(
+                "🤖 Prediction Model",
+                [
+                    "XGBoost",
+                    "Random Forest",
+                    "Logistic Regression",
+                    "Multinomial Logistic Regression",
+                    "Decision Tree",
+                    "Support Vector Machine",
+                    "SVM (Kernel)",
+                    "Naive Bayes",
+                    "MLP (Neural Net)",
+                    "Linear Regression",
+                ],
+                key="xgb_pred_model",
+                help="Algorithm to train and use for predictions."
+            )
 
-                            st.markdown(
-                                "#### Predictions vs Original Data")
-                            st.dataframe(predictions_df.head(
-                                20), use_container_width=True)
+            pred_target = st.selectbox(
+                "🎯 Target Feature",
+                numeric_cols,
+                index=(numeric_cols.index(xgb_target) if xgb_target in numeric_cols else 0),
+                key="xgb_pred_target",
+                help="Column to predict."
+            )
+            _default_feats = [c for c in (xgb_features or []) if c != pred_target] or [c for c in numeric_cols if c != pred_target]
+            pred_features = st.multiselect(
+                "📊 Training Features",
+                [c for c in numeric_cols if c != pred_target],
+                default=_default_feats,
+                key="xgb_pred_features",
+                help="Columns used as inputs to train the model."
+            )
 
-                            # Download predictions
-                            csv = predictions_df.to_csv(index=False)
-                            st.download_button(
-                                label=" Download Predictions CSV",
-                                data=csv,
-                                file_name="xgboost_predictions.csv",
-                                mime="text/csv"
+            pred_task = st.radio(
+                "⚙️ Task Type",
+                ["Auto-detect", "Regression", "Classification"],
+                horizontal=True,
+                key="xgb_pred_task"
+            )
+            pred_test_size = st.slider(
+                "🧪 Test Size (%)", 10, 50, 20, key="xgb_pred_test_size"
+            ) / 100.0
+
+            svm_kernel = None
+            if pred_model_name == "SVM (Kernel)":
+                svm_kernel = st.selectbox(
+                    "Kernel", ["rbf", "poly", "sigmoid"], key="xgb_pred_svm_kernel"
+                )
+
+            if st.button(" Make Predictions", key="xgb_predict", type="primary"):
+                if not pred_features:
+                    st.warning("Please select at least one feature.")
+                elif pred_target not in df.columns:
+                    st.error(f"Target column '{pred_target}' not found.")
+                else:
+                    with st.spinner(f"Training {pred_model_name} and predicting..."):
+                        try:
+                            X_full, y_full = sanitize_dataframe_for_xgboost(
+                                df, pred_features, pred_target
                             )
-                        else:
-                            st.error(
-                                "No trained model found. Please train a model first.")
+
+                            if pred_task == "Auto-detect":
+                                is_classification = (
+                                    y_full.dtype == object
+                                    or y_full.nunique() <= max(20, int(0.05 * len(y_full)))
+                                )
+                            else:
+                                is_classification = pred_task == "Classification"
+
+                            if is_classification:
+                                y_enc = LabelEncoder().fit_transform(y_full.astype(str))
+                            else:
+                                y_enc = y_full.values
+
+                            X_arr = X_full.values.astype(np.float64)
+                            X_train, X_test, y_train, y_test = train_test_split(
+                                X_arr, y_enc, test_size=pred_test_size, random_state=42
+                            )
+
+                            model = None
+                            if pred_model_name == "XGBoost":
+                                try:
+                                    import xgboost as xgb
+                                    model = (
+                                        xgb.XGBClassifier(
+                                            n_estimators=n_estimators, max_depth=max_depth,
+                                            learning_rate=learning_rate, random_state=42,
+                                            use_label_encoder=False, eval_metric='mlogloss'
+                                        )
+                                        if is_classification else
+                                        xgb.XGBRegressor(
+                                            n_estimators=n_estimators, max_depth=max_depth,
+                                            learning_rate=learning_rate, random_state=42
+                                        )
+                                    )
+                                except Exception as _e:
+                                    st.error(f"XGBoost not available: {_e}")
+                            elif pred_model_name == "Random Forest":
+                                model = (RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
+                                         if is_classification else
+                                         RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42))
+                            elif pred_model_name == "Logistic Regression":
+                                model = LogisticRegression(max_iter=1000) if is_classification else LinearRegression()
+                            elif pred_model_name == "Multinomial Logistic Regression":
+                                model = (LogisticRegression(multi_class='multinomial', solver='lbfgs', max_iter=1000)
+                                         if is_classification else LinearRegression())
+                            elif pred_model_name == "Decision Tree":
+                                model = (DecisionTreeClassifier(max_depth=max_depth, random_state=42)
+                                         if is_classification else
+                                         DecisionTreeRegressor(max_depth=max_depth, random_state=42))
+                            elif pred_model_name == "Support Vector Machine":
+                                model = SVC() if is_classification else SVR()
+                            elif pred_model_name == "SVM (Kernel)":
+                                model = (SVC(kernel=svm_kernel) if is_classification else SVR(kernel=svm_kernel))
+                            elif pred_model_name == "Naive Bayes":
+                                if is_classification:
+                                    model = GaussianNB()
+                                else:
+                                    st.warning("Naive Bayes is classification-only — falling back to Linear Regression.")
+                                    model = LinearRegression()
+                            elif pred_model_name == "MLP (Neural Net)":
+                                model = (MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=500, random_state=42)
+                                         if is_classification else
+                                         MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=500, random_state=42))
+                            elif pred_model_name == "Linear Regression":
+                                model = LogisticRegression(max_iter=1000) if is_classification else LinearRegression()
+
+                            if model is None:
+                                st.error(f"Model '{pred_model_name}' is not available.")
+                            else:
+                                model.fit(X_train, y_train)
+                                y_pred_test = model.predict(X_test)
+
+                                st.markdown("##### 📈 Test Metrics")
+                                m1, m2 = st.columns(2)
+                                if is_classification:
+                                    m1.metric("Accuracy", f"{accuracy_score(y_test, y_pred_test):.3f}")
+                                    try:
+                                        m2.metric("F1 (weighted)", f"{f1_score(y_test, y_pred_test, average='weighted'):.3f}")
+                                    except Exception:
+                                        pass
+                                else:
+                                    m1.metric("R²", f"{r2_score(y_test, y_pred_test):.3f}")
+                                    m2.metric("RMSE", f"{np.sqrt(mean_squared_error(y_test, y_pred_test)):.3f}")
+
+                                full_pred = model.predict(X_arr)
+                                predictions_df = df[pred_features + [pred_target]].copy().reset_index(drop=True)
+                                predictions_df['Predictions'] = full_pred
+                                st.session_state.xgboost_predictions_df = predictions_df
+
+                                st.markdown("""
+                                    <div class="notification-success" style="animation: slideInRight 0.5s ease-out;">
+                                        <span class="icon-animated"> </span> Predictions generated!
+                                    </div>
+                                """, unsafe_allow_html=True)
+
+                                st.markdown(
+                                    "#### Predictions vs Original Data")
+                                st.dataframe(predictions_df.head(
+                                    20), use_container_width=True)
+
+                                st.markdown("##### 📊 Visualize Predictions")
+                                if is_classification:
+                                    try:
+                                        cm = confusion_matrix(y_test, y_pred_test)
+                                        fig_cm = px.imshow(
+                                            cm, text_auto=True,
+                                            labels=dict(x="Predicted", y="Actual", color="Count"),
+                                            title="Confusion Matrix (test set)",
+                                            template="plotly_dark",
+                                            color_continuous_scale="Viridis",
+                                        )
+                                        st.plotly_chart(fig_cm, use_container_width=True)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        pred_counts = pd.Series(full_pred).value_counts().sort_index()
+                                        fig_dist = px.bar(
+                                            x=pred_counts.index.astype(str),
+                                            y=pred_counts.values,
+                                            labels={'x': 'Predicted class', 'y': 'Count'},
+                                            title="Prediction class distribution (full dataset)",
+                                            template="plotly_dark",
+                                        )
+                                        st.plotly_chart(fig_dist, use_container_width=True)
+                                    except Exception:
+                                        pass
+                                else:
+                                    try:
+                                        fig_av = go.Figure()
+                                        fig_av.add_trace(go.Scatter(
+                                            x=y_test, y=y_pred_test,
+                                            mode='markers',
+                                            marker=dict(color='#39ff14', opacity=0.75),
+                                            name='Predictions',
+                                        ))
+                                        _mn = float(min(np.min(y_test), np.min(y_pred_test)))
+                                        _mx = float(max(np.max(y_test), np.max(y_pred_test)))
+                                        fig_av.add_trace(go.Scatter(
+                                            x=[_mn, _mx], y=[_mn, _mx],
+                                            mode='lines',
+                                            line=dict(color='#ff00ff', dash='dash'),
+                                            name='Perfect Fit',
+                                        ))
+                                        fig_av.update_layout(
+                                            title=f"Actual vs Predicted — {pred_target}",
+                                            template="plotly_dark",
+                                            xaxis_title="Actual",
+                                            yaxis_title="Predicted",
+                                        )
+                                        st.plotly_chart(fig_av, use_container_width=True)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        residuals = np.asarray(y_test) - np.asarray(y_pred_test)
+                                        fig_res = px.histogram(
+                                            residuals, nbins=30,
+                                            title="Residuals (test set)",
+                                            template="plotly_dark",
+                                            labels={'value': 'Residual'},
+                                        )
+                                        st.plotly_chart(fig_res, use_container_width=True)
+                                    except Exception:
+                                        pass
+
+                                importances = None
+                                if hasattr(model, 'feature_importances_'):
+                                    importances = np.asarray(model.feature_importances_)
+                                elif hasattr(model, 'coef_'):
+                                    _coef = np.asarray(model.coef_)
+                                    importances = (np.abs(_coef).mean(axis=0)
+                                                   if _coef.ndim > 1 else np.abs(_coef))
+                                if importances is not None and len(importances) == len(pred_features):
+                                    try:
+                                        imp_df = pd.DataFrame({
+                                            'feature': pred_features,
+                                            'importance': importances,
+                                        }).sort_values('importance', ascending=True)
+                                        fig_imp = px.bar(
+                                            imp_df, x='importance', y='feature',
+                                            orientation='h',
+                                            title="Feature Importance",
+                                            template="plotly_dark",
+                                        )
+                                        st.plotly_chart(fig_imp, use_container_width=True)
+                                    except Exception:
+                                        pass
+
+                                with st.expander("📋 View all predictions", expanded=False):
+                                    st.dataframe(predictions_df, use_container_width=True)
+                                st.caption("💡 Predictions are also available on the Dashboard page under the Predictions panel.")
+
+                                csv = predictions_df.to_csv(index=False)
+                                st.download_button(
+                                    label=" Download Predictions CSV",
+                                    data=csv,
+                                    file_name=f"{pred_model_name.lower().replace(' ', '_').replace('(', '').replace(')', '')}_predictions.csv",
+                                    mime="text/csv"
+                                )
+                        except Exception as _e:
+                            st.error(f"Prediction failed: {_e}")
 
         with xgb_sub_tab2:
             st.markdown("### 🌊 Your Model Lake - Saved AI Models")

@@ -1,0 +1,29 @@
+{
+    "model_id": "original_20260601_030311",
+    "dataset_name": "original",
+    "task_type": "regression",
+    "target_col": "cancer",
+    "feature_cols": [
+        "population"
+    ],
+    "error_metrics": {
+        "passes_test": true,
+        "error_rate": 0.06523680158737175,
+        "threshold": 0.1,
+        "rmse": 15.983016388906078,
+        "mae": 9.20877091611018,
+        "mse": 255.45681288804028,
+        "r2": 0.8841247220608692,
+        "task_type": "regression"
+    },
+    "params": {
+        "max_depth": 3,
+        "learning_rate": 0.1,
+        "n_estimators": 100,
+        "random_state": 42
+    },
+    "timestamp": "2026-06-01T03:03:11.843874",
+    "autoencoder_used": false,
+    "scaler": null,
+    "poly_features": null
+}

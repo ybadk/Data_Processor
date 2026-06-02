@@ -1,0 +1,108 @@
+Strategy: Short put butterfly
+... This is a volatility strategy consisting of a short position in an ITM put option with
+... a strike price K1, a long position in two ATM put options with a strike price K2,
+... and a short position in an OTM put option with a strike price K3. The strikes are
+... equidistant: K2 − K3 = K1 − K2 = κ. This is a net credit trade. In this sense, this
+... is an income strategy. However, the potential reward is sizably smaller than with a
+... short straddle or a short strangle (albeit with a lower risk). The trader’s outlook is
+... neutral. We have:
+... fT = 2 × (K2 − ST )
+... + − (K1 − ST )
+... + − (K3 − ST )
+... + + C (191)
+... S∗down = K3 + C (192)
+... S∗up = K1 − C (193)
+... Pmax = C (194)
+... Lmax = κ − C (195)
+To implement the described short put butterfly strategy in MetaQuotes Query Language (MQL), you'll need to set up a trading environment where MQL is supported, such as MetaTrader 4 (MT4). Below are steps and code
+snippets for executing this strategy:
+
+### Setup
+1. Open MetaTrader 4.
+2. Ensure your account has the necessary permissions to execute trades, including access to put options.
+3. Connect to your broker's trading platform using MQL language support.
+
+### MQL Code for Short Put Butterfly Strategy
+```mql4
+//+------------------------------------------------------------------+
+//| Expert Initialization function                                      |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   // Define the parameters for the options contracts (you'll need to adjust these based on your broker's available put options)
+   double K1 = 100.0;  // ITM strike price
+   double K2 = 98.5;   // ATM strike price 1
+   double K3 = 97.0;   // ATM strike price 2
+   double C = 0.05;    // Premium received/paid as net credit/debit
+
+   // Create and configure the options for the positions
+   IPositionPositionData[] positions = new IPositionPositionData[3];
+   positions[0] = OpenPosition(POSITION_TYPE_OPPOSITE, OP_BUY, K1, C); // Short ITM put
+   positions[1] = OpenPosition(POSITION_TYPE_LONG, OP_SELL, K2, C);    // Long ATM put 1
+   positions[2] = OpenPosition(POSITION_TYPE_LONG, OP_SELL, K2, C);    // Long ATM put 2
+
+   // Store the trades in an array for tracking and analysis
+   ArraySetAsSeries(positions, true);
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit() {}
+
+//+------------------------------------------------------------------+
+//| Main function                                                  |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   IPositionPositionData[] positions = new IPositionPositionData[3];
+
+   // Retrieve the current positions and their data
+   for (int i = 0; i < ArraySize(positions); i++)
+       positions[i] = PositionGet("BuySell", OP_TYPE_BUY_SELL, i, POSITION_POSITIONDATA);
+
+   // Calculate payoff based on current stock price at maturity
+   double ST = MarketInfo(Symbol(), MODE_PRICE).Price;  // Assuming ST is the current market price
+
+   double fT = 0.0;
+
+   // Calculate the payoff for each position
+   for (int i = 0; i < ArraySize(positions); i++)
+   {
+      IPositionPositionData& pos = positions[i];
+      switch (pos.op_type)
+      {
+         case OP_BUY:
+            fT += -(K1 - ST) + C;  // Short ITM put
+            break;
+
+         case OP_SELL:
+            fT += 2 * (K2 - ST) - C;  // Long ATM puts
+            break;
+      }
+   }
+
+   // Print the current payoff and break-even points for analysis
+   Print("Current Payoff at Maturity: ", fT);
+   Print("Break-Even Stock Prices: Down =", S*down, " Up =", S*up);
+   Print("Maximum Profit: ", Pmax);
+   Print("Maximum Loss: ", Lmax);
+}
+```
+### Explanation:
+1. **Initialization (`OnInit`)**: This function sets up the strategy parameters such as strike prices and net credit/debit. It creates positions for a short put, two long puts at ATM, and assigns a premium to them.
+The array of positions is initialized with these trades.
+
+2. **Main Tick Function (`OnTick`)**: This function is called every tick (price change) in the market. It retrieves the current positions of the options contracts, calculates the payoff based on the current stock
+price at maturity (`ST`), and prints relevant information such as the current payoff and break-even points.
+
+3. **Break-Even Points (`S*down` and `S*up`)**: These are calculated using the provided formulas for a short put butterfly: `K3 + C` and `K1 - C`, respectively.
+
+4. **Maximum Profit (`Pmax`)** and **Maximum Loss (`Lmax`)**: Calculated based on the net credit received (`C`). For this strategy, `Pmax` is equal to `C`, and `Lmax` is calculated as `κ - C`.
+
+### Notes:
+- This code assumes you have already set up your MetaTrader 4 environment correctly, including the appropriate options contracts for strike prices `K1`, `K2`, and `K3` with premium `C`.
+- The actual MQL function names and structure (like `Init`, `OnTick`, `Deinit`) are standard in MetaQuotes Language 4 (MQL4). You'll need to ensure your environment supports these functions.
+- This code is illustrative; real implementation would require specific details such as exact strike prices, broker permissions, and risk management considerations.
