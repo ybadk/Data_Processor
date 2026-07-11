@@ -469,8 +469,6 @@ def init_session_state():
         st.session_state.model_metrics = {}
     if "auto_ml_metrics" not in st.session_state:
         st.session_state.auto_ml_metrics = None
-    if "show_metrics_overlay" not in st.session_state:
-        st.session_state.show_metrics_overlay = False
     if "xgboost_predictions_df" not in st.session_state:
         st.session_state.xgboost_predictions_df = None
     if "loader_index" not in st.session_state:
@@ -512,72 +510,82 @@ def show_loading_animation(message: str, duration: int=5):
     status_text.empty()
 
 
-# Floating Metrics Overlay
-def render_metrics_overlay():
-    """Render floating metrics overlay with auto-run ML results using Streamlit components"""
-    if st.session_state.auto_ml_metrics:
-        # Create a container in the sidebar for the floating metrics
-        with st.sidebar:
-            st.markdown("---")
+def _metadata_to_dataframe(metadata: Dict[str, Any]) -> pd.DataFrame:
+    """Convert a metadata dict into a two-column dataframe for display."""
+    rows = []
+    for key, value in metadata.items():
+        if key == "processing_log" and isinstance(value, list):
+            rows.append({"Field": key, "Value": f"{len(value)} log entries (see below)"})
+        elif isinstance(value, (list, dict)):
+            rows.append({"Field": key, "Value": json.dumps(value, default=str)})
+        else:
+            rows.append({"Field": key, "Value": value})
+    return pd.DataFrame(rows)
 
-            # Header with toggle button
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(
-                    "### Auto-ML Metrics", unsafe_allow_html=True)
-            with col2:
-                if st.button("✕" if st.session_state.show_metrics_overlay else " ",
-                             key="toggle_metrics",
-                             help="Close" if st.session_state.show_metrics_overlay else "Show Metrics"):
-                    st.session_state.show_metrics_overlay = not st.session_state.show_metrics_overlay
-                    st.rerun()
 
-            # Show metrics if overlay is open
-            if st.session_state.show_metrics_overlay:
-                metrics = st.session_state.auto_ml_metrics
+def _profile_to_dataframe(profile) -> pd.DataFrame:
+    """Convert a DataProfile into a readable dataframe."""
+    data = profile.to_dict()
+    return pd.DataFrame([{"Metric": k, "Value": v} for k, v in data.items()])
 
-                # Display regression metrics
-                if metrics.get('regression_metrics'):
-                    st.markdown(
-                        "#### Regression Models", unsafe_allow_html=True)
 
-                    for model_name, model_metrics in metrics['regression_metrics'].items():
-                        if 'error' not in model_metrics:
-                            with st.container():
-                                st.markdown(f"**{model_name}**")
-                                col1, col2, col3 = st.columns(3)
+def render_model_guidance_panel(df: pd.DataFrame):
+    """
+    Unified model guidance: Auto-ML benchmark results plus probabilistic
+    model recommendations (formerly split across sidebar and Decision Making).
+    """
+    st.markdown("### Model Guidance")
+    st.caption(
+        "Combined Auto-ML benchmarks and rule-based model recommendations "
+        "for your processed dataset."
+    )
 
-                                with col1:
-                                    st.metric(
-                                        label="R² Score",
-                                        value=f"{model_metrics.get('R2', 0):.4f}"
-                                    )
+    metrics = st.session_state.get("auto_ml_metrics")
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    target_col = numeric_cols[-1] if len(numeric_cols) >= 2 else None
+    profile = profile_dataset(df, target_col)
 
-                                with col2:
-                                    st.metric(
-                                        label="RMSE",
-                                        value=f"{model_metrics.get('RMSE', 0):.4f}"
-                                    )
+    tab_automl, tab_recommend = st.tabs(["Auto-ML Metrics", "Model Recommendations"])
 
-                                with col3:
-                                    st.metric(
-                                        label="MAE",
-                                        value=f"{model_metrics.get('MAE', 0):.4f}"
-                                    )
+    with tab_automl:
+        if not metrics:
+            st.info("Run **Process Data** to generate Auto-ML benchmark metrics.")
+        else:
+            if metrics.get("best_model"):
+                st.success(
+                    f"Best benchmark model: **{metrics['best_model']}** "
+                    f"(R² {metrics.get('best_score', 0):.4f})"
+                )
 
-                                st.markdown("---")
+            reg_rows = []
+            for model_name, model_metrics in metrics.get("regression_metrics", {}).items():
+                if "error" not in model_metrics:
+                    reg_rows.append({
+                        "Model": model_name,
+                        "R² Score": round(model_metrics.get("R2", 0), 4),
+                        "RMSE": round(model_metrics.get("RMSE", 0), 4),
+                        "MAE": round(model_metrics.get("MAE", 0), 4),
+                    })
+            if reg_rows:
+                st.markdown("#### Regression Models")
+                st.dataframe(pd.DataFrame(reg_rows), use_container_width=True, hide_index=True)
+            elif metrics.get("regression_metrics"):
+                st.warning("Auto-ML ran but no regression models completed successfully.")
 
-                # Display best model
-                if metrics.get('best_model'):
-                    st.success(
-                        f" **Best Model:** {metrics['best_model']}")
-                    st.metric(
-                        label="Best Score (R²)",
-                        value=f"{metrics['best_score']:.4f}",
-                        delta=None
-                    )
+    with tab_recommend:
+        top_k = st.slider("How many candidates", 3, 8, 5, key="process_page_topk")
+        recs = ModelRecommender().recommend(profile, top_k=top_k)
+        if recs:
+            rec_df = pd.DataFrame([{
+                "Model": r.name,
+                "Score": round(r.score, 3),
+                "Rationale": r.rationale,
+            } for r in recs])
+            st.dataframe(rec_df, use_container_width=True, hide_index=True)
+            st.success(f"Top recommendation: **{recs[0].name}** (score {recs[0].score:.2f})")
+        else:
+            st.info("Not enough numeric features to generate recommendations.")
 
-            st.markdown("---")
 
 # Header section
 
@@ -1810,11 +1818,13 @@ def render_process():
                 auto_ml_results = st.session_state.ml_integration.auto_run_models(
                     processed_df)
                 st.session_state.auto_ml_metrics = auto_ml_results
-                st.session_state.show_metrics_overlay = True
 
                 if auto_ml_results.get('best_model'):
                     st.success(
-                        f" Auto-ML complete! Best model: {auto_ml_results['best_model']} (R² Score: {auto_ml_results['best_score']:.4f})")
+                        f" Auto-ML complete! Best model: {auto_ml_results['best_model']} "
+                        f"(R² Score: {auto_ml_results['best_score']:.4f}). "
+                        f"See **Model Guidance** below for full details."
+                    )
             except Exception as e:
                 st.warning(f"Auto-ML evaluation skipped: {str(e)}")
 
@@ -1863,6 +1873,8 @@ def render_process():
             st.divider()
             st.dataframe(processed_df.head(10), use_container_width=True)
             st.divider()
+
+    render_model_guidance_panel(st.session_state.current_data)
 
 # Dashboard page
 
@@ -2176,7 +2188,19 @@ def render_database():
                     if st.button(f" View Details", key=f"details_ds_{ds['id']}"):
                         metadata = st.session_state.db_manager.get_dataset_metadata(ds['id'])
                         if metadata:
-                            st.json(metadata)
+                            st.dataframe(
+                                _metadata_to_dataframe(metadata),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                            log = metadata.get("processing_log") or []
+                            if isinstance(log, list) and log:
+                                st.markdown("**Processing Log**")
+                                st.dataframe(
+                                    pd.DataFrame({"Entry": log}),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
                 with m_col3:
                     if st.button(f" Delete", key=f"delete_ds_{ds['id']}"):
                         if st.session_state.db_manager.delete_dataset(ds['id']):
@@ -3018,7 +3042,18 @@ def render_machine_learning():
 
                             for model_name, model_result in results.items():
                                 if 'model_id' in model_result:
-                                    st.success(f"🎯 {model_name.upper()}: Model saved with {model_result['error_results']['error_rate']:.2%} error")
+                                    baseline = model_result.get('baseline_optimization') or {}
+                                    baseline_note = ""
+                                    if baseline.get('method'):
+                                        baseline_note = (
+                                            f" | Linear baseline ({baseline['method']}): "
+                                            f"{baseline.get('error_rate', 0):.2%} error"
+                                        )
+                                    st.success(
+                                        f"🎯 {model_name.upper()}: Model saved with "
+                                        f"{model_result['error_results']['error_rate']:.2%} error"
+                                        f"{baseline_note}"
+                                    )
                                 elif 'error' in model_result:
                                     st.warning(f"⚠️ {model_name.upper()}: {model_result['error']}")
                                 else:
@@ -3578,9 +3613,8 @@ def render_decision_making():
 
     profile = profile_dataset(df, target_col)
 
-    tab_profile, tab_recommend, tab_uncert, tab_bma, tab_bandit, tab_matrix = st.tabs([
+    tab_profile, tab_uncert, tab_bma, tab_bandit, tab_matrix = st.tabs([
         "📊 Data Profile",
-        "🎯 Model Recommender",
         "📈 Uncertainty",
         "⚖️ Bayesian Averaging",
         "🎰 Bandit Selection",
@@ -3594,24 +3628,7 @@ def render_decision_making():
         c2.metric("Features", f"{profile.n_features}")
         c3.metric("Task", profile.task_type)
         c4.metric("Missing", f"{profile.missing_ratio:.1%}")
-        st.json(profile.to_dict())
-
-    with tab_recommend:
-        st.markdown("### Probabilistic Model Recommendations")
-        st.write(
-            "Recommendations are scored using rules derived from the "
-            "`probablistic_reasoning` and `utility_function_summary` notes "
-            "in `decision-making-ML/`."
-        )
-        top_k = st.slider("How many candidates", 3, 8, 5, key="dm_topk")
-        recs = ModelRecommender().recommend(profile, top_k=top_k)
-        rec_df = pd.DataFrame([{
-            "Model": r.name, "Score": round(r.score, 3), "Rationale": r.rationale
-        } for r in recs])
-        st.dataframe(rec_df, use_container_width=True)
-        if recs:
-            st.success(f"Top recommendation: **{recs[0].name}** "
-                       f"(score {recs[0].score:.2f})")
+        st.dataframe(_profile_to_dataframe(profile), use_container_width=True, hide_index=True)
 
     with tab_uncert:
         st.markdown("### Bootstrap Prediction Intervals")
@@ -3855,9 +3872,6 @@ def main():
 
     # Render header
     render_header()
-
-    # Render floating metrics overlay
-    render_metrics_overlay()
 
     # Render sidebar and get selected page
     selected_page = render_sidebar()

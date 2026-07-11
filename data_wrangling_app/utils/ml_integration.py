@@ -28,6 +28,12 @@ from datetime import datetime
 from typing import Dict, Any, Tuple, List
 import logging
 import warnings
+
+from utils.normal_equation_optimizer import (
+    evaluate_baseline,
+    tune_xgboost_params,
+    build_param_candidates,
+)
 warnings.filterwarnings('ignore')
 
 # New imports for PyTorch and Transformers
@@ -430,66 +436,6 @@ class DataPartitioner:
             'categorical': df[categorical_cols]
         }
 
-    """
-    Tests model error rates before saving to ensure quality control.
-    Ensures error rate is below 10% before allowing model persistence.
-    """
-    
-    def __init__(self, max_error_rate: float=0.10):
-        self.max_error_rate = max_error_rate
-    
-    def test_regression_error(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-        """
-        Test regression model error metrics
-        Returns error rates and pass/fail status
-        """
-        mse = mean_squared_error(y_true, y_pred)
-        rmse = np.sqrt(mse)
-        mae = mean_absolute_error(y_true, y_pred)
-        mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100  # Mean Absolute Percentage Error
-        
-        # Calculate error rate as MAPE (percentage)
-        error_rate = mape / 100.0
-        
-        return {
-            'mse': mse,
-            'rmse': rmse,
-            'mae': mae,
-            'mape': mape,
-            'error_rate': error_rate,
-            'passes_test': error_rate < self.max_error_rate
-        }
-    
-    def test_classification_error(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-        """
-        Test classification model error metrics
-        Returns error rates and pass/fail status
-        """
-        accuracy = accuracy_score(y_true, y_pred)
-        error_rate = 1.0 - accuracy  # Error rate is 1 - accuracy
-        
-        return {
-            'accuracy': accuracy,
-            'error_rate': error_rate,
-            'passes_test': error_rate < self.max_error_rate
-        }
-    
-    def validate_model_for_saving(self, model, X_test: np.ndarray, y_test: np.ndarray, task_type: str) -> Dict[str, Any]:
-        """
-        Comprehensive validation before saving model
-        """
-        y_pred = model.predict(X_test)
-        
-        if task_type == 'regression':
-            results = self.test_regression_error(y_test, y_pred)
-        else:
-            results = self.test_classification_error(y_test, y_pred)
-        
-        results['task_type'] = task_type
-        results['validation_timestamp'] = datetime.now().isoformat()
-        
-        return results
-
 
 class AsyncMLTrainer:
     """
@@ -872,46 +818,84 @@ class MLIntegration:
                 X_test_array = np.asarray(X.iloc[test_idx].values, dtype=np.float64, order='C')
                 y_train_array = np.asarray(y.iloc[train_idx].values, dtype=np.float64, order='C')
                 y_test_array = np.asarray(y.iloc[test_idx].values, dtype=np.float64, order='C')
-                
-                # Use RobustXGBoostClient instead of sklearn wrapper
-                client = RobustXGBoostClient()
-                
-                # Try with autoencoder first for high-dimensional data
-                use_autoencoder = X_train_array.shape[1] > 20
-                
+
+                # Linear baseline via normal equation / cost minimization / gradient descent
+                baseline = evaluate_baseline(
+                    X_train_array, y_train_array,
+                    X_test_array, y_test_array,
+                    self.error_tester,
+                    task_type.lower(),
+                )
+
                 xgb_params = params or {
                     'max_depth': 3,
                     'learning_rate': 0.1,
                     'n_estimators': 100,
                     'random_state': 42
                 }
-                
-                # Train with RobustXGBoostClient
-                success = client.fit(
-                    X_train_array,
-                    y_train_array,
-                    task_type=task_type.lower(),
-                    use_autoencoder=use_autoencoder,
-                    **xgb_params
+                tuned_params = tune_xgboost_params(
+                    baseline.get('error_rate', 1.0),
+                    xgb_params,
+                    baseline.get('passes_test', False),
                 )
-                
-                if not success:
+                param_candidates = build_param_candidates(tuned_params)
+
+                # Try with autoencoder first for high-dimensional data
+                use_autoencoder = X_train_array.shape[1] > 20
+
+                client = None
+                error_results = None
+                used_params = tuned_params
+
+                for candidate_params in param_candidates:
+                    client = RobustXGBoostClient()
+                    try:
+                        success = client.fit(
+                            X_train_array,
+                            y_train_array,
+                            task_type=task_type.lower(),
+                            use_autoencoder=use_autoencoder,
+                            **candidate_params
+                        )
+                        if not success:
+                            continue
+
+                        y_pred = client.predict(X_test_array)
+
+                        if task_type == 'regression':
+                            error_results = self.error_tester.test_regression_error(
+                                y_test_array, y_pred
+                            )
+                        else:
+                            if len(np.unique(y_train_array)) > 2:
+                                y_pred = (
+                                    np.argmax(y_pred, axis=1)
+                                    if len(y_pred.shape) > 1
+                                    else y_pred
+                                )
+                            y_test_int = y_test_array.astype(int)
+                            error_results = self.error_tester.test_classification_error(
+                                y_test_int, y_pred.astype(int)
+                            )
+
+                        used_params = candidate_params
+                        if error_results.get('passes_test'):
+                            break
+                    except Exception as train_exc:
+                        logger.warning(
+                            "XGBoost candidate params failed for %s: %s",
+                            dataset_name, train_exc,
+                        )
+                        client = None
+                        error_results = None
+                        continue
+
+                if client is None or error_results is None:
                     model_results[dataset_name] = {
-                        'error': 'XGBoost and fallback models failed'
+                        'error': 'XGBoost and fallback models failed',
+                        'baseline': baseline,
                     }
                     continue
-                
-                # Make predictions
-                y_pred = client.predict(X_test_array)
-                
-                # Test error using our error tester
-                if task_type == 'regression':
-                    error_results = self.error_tester.test_regression_error(y_test_array, y_pred)
-                else:
-                    if len(np.unique(y_train_array)) > 2:
-                        y_pred = np.argmax(y_pred, axis=1) if len(y_pred.shape) > 1 else y_pred
-                    y_test_int = y_test_array.astype(int)
-                    error_results = self.error_tester.test_classification_error(y_test_int, y_pred.astype(int))
 
                 # Only save if error rate < 10%
                 if error_results['passes_test']:
@@ -932,7 +916,8 @@ class MLIntegration:
                         'target_col': target_col,
                         'feature_cols': valid_feature_cols,
                         'error_metrics': error_results,
-                        'params': {k: v for k, v in xgb_params.items() if isinstance(v, (int, float, str, bool))},
+                        'params': {k: v for k, v in used_params.items() if isinstance(v, (int, float, str, bool))},
+                        'baseline_optimization': baseline,
                         'timestamp': datetime.now().isoformat(),
                         'autoencoder_used': use_autoencoder,
                         'scaler': dataset.get('scaler'),
@@ -947,12 +932,14 @@ class MLIntegration:
                         'model_id': model_id,
                         'error_results': error_results,
                         'model_path': model_path,
-                        'with_autoencoder': use_autoencoder
+                        'with_autoencoder': use_autoencoder,
+                        'baseline_optimization': baseline,
                     }
                 else:
                     model_results[dataset_name] = {
                         'error': f"Model failed error test: {error_results['error_rate']:.2%} > 10%",
-                        'error_results': error_results
+                        'error_results': error_results,
+                        'baseline_optimization': baseline,
                     }
             except Exception as e:
                 model_results[dataset_name] = {

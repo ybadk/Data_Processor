@@ -1,0 +1,6 @@
+[REMOVED AT REQUEST OF SAME.DEV]  
+
+This file previously contained system instructions related to same.dev.  
+At the request of the same.dev team, the content has been removed.  
+
+For information about AI security and system prompt exposure, you can check other folders in this repo.
